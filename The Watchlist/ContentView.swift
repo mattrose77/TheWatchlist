@@ -9,6 +9,7 @@ import SwiftUI
 
 struct ContentView: View {
     @StateObject private var store = MovieStore()
+    @AppStorage("hasSeenWelcome") private var hasSeenWelcome = false
     
     var body: some View {
         ZStack {
@@ -16,23 +17,27 @@ struct ContentView: View {
             AppGradient.background
                 .ignoresSafeArea()
             
-            TabView {
-                BrowseView()
-                    .tabItem {
-                        Label("Browse", systemImage: "film")
-                    }
-                
-                WatchlistView()
-                    .tabItem {
-                        Label("Watchlist", systemImage: "popcorn.fill")
-                    }
-                
-                ArchiveView()
-                    .tabItem {
-                        Label("Archive", systemImage: "checkmark.circle.fill")
-                    }
+            if hasSeenWelcome {
+                TabView {
+                    BrowseView()
+                        .tabItem {
+                            Label("Browse", systemImage: "film")
+                        }
+                    
+                    WatchlistView()
+                        .tabItem {
+                            Label("Watchlist", systemImage: "popcorn.fill")
+                        }
+                    
+                    ArchiveView()
+                        .tabItem {
+                            Label("Archive", systemImage: "checkmark.circle.fill")
+                        }
+                }
+                .environmentObject(store)
+            } else {
+                WelcomeView(hasSeenWelcome: $hasSeenWelcome)
             }
-            .environmentObject(store)
         }
     }
 }

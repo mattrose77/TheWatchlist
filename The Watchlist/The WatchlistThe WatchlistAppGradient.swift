@@ -26,6 +26,18 @@ struct AppGradient {
     /// Black color at the bottom of the gradient
     static let bottomBlack = Color(hex: "#0d0d0d")
     
+    /// App green color for buttons and success states
+    static let green = AppGradient.gold.opacity(0.6)
+    
+    /// App blue color for buttons and primary actions
+    static let blue = Color(hex: "2C5F8A")
+    
+    /// App white button color for secondary actions
+    static let buttonWhite = Color(hex: "F2F2F2").opacity(0.2)
+    
+    /// App white button border color
+    static let buttonWhiteBorder = Color(hex: "F2F2F2").opacity(0.3)
+    
     // MARK: - Gradient Definition
     
     /// Main app background gradient (bright gold → gold → mid red → deep red → black)
@@ -159,6 +171,64 @@ extension Color {
                 
                 Text("Accent - #E8C96A")
                     .foregroundStyle(AppTextColors.accent)
+            }
+            .padding()
+            .background(Color.black.opacity(0.3))
+            .cornerRadius(16)
+            
+            // Button color examples
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Button Colors:")
+                    .font(.headline)
+                    .foregroundStyle(AppTextColors.primary)
+                
+                HStack(spacing: 12) {
+                    // Green button
+                    Button {
+                        // Preview action
+                    } label: {
+                        Text("Green")
+                            .font(.subheadline)
+                            .fontWeight(.semibold)
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 20)
+                            .padding(.vertical, 10)
+                            .background(AppGradient.green)
+                            .clipShape(RoundedRectangle(cornerRadius: 10))
+                    }
+                    
+                    // Blue button
+                    Button {
+                        // Preview action
+                    } label: {
+                        Text("Blue")
+                            .font(.subheadline)
+                            .fontWeight(.semibold)
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 20)
+                            .padding(.vertical, 10)
+                            .background(AppGradient.blue)
+                            .clipShape(RoundedRectangle(cornerRadius: 10))
+                    }
+                    
+                    // White button
+                    Button {
+                        // Preview action
+                    } label: {
+                        Text("White")
+                            .font(.subheadline)
+                            .fontWeight(.semibold)
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 20)
+                            .padding(.vertical, 10)
+                            .background(AppGradient.buttonWhite)
+                            .clipShape(RoundedRectangle(cornerRadius: 10))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 10)
+                                    .stroke(AppGradient.buttonWhiteBorder, lineWidth: 1)
+                            )
+                    }
+                }
             }
             .padding()
             .background(Color.black.opacity(0.3))

@@ -13,8 +13,18 @@ struct BrowseMovieDetailView: View {
     @Environment(\.openURL) var openURL
     @State private var trailer: Video?
     @State private var isLoadingTrailer = false
+    @State private var showRatingSheet = false
+    @State private var currentRating: Double = 0.0
+    @State private var collection: CollectionDetails?
+    @State private var isLoadingCollection = false
+    @State private var selectedCollectionMovie: Movie?
+    @State private var movieWithDetails: Movie?
     
     let movie: Movie
+    
+    var displayMovie: Movie {
+        movieWithDetails ?? movie
+    }
     
     var isInWatchlist: Bool {
         store.watchlist.contains(where: { $0.id == movie.id })
@@ -35,34 +45,7 @@ struct BrowseMovieDetailView: View {
                 VStack(spacing: 24) {
                     // Poster with Play Button Overlay
                     ZStack(alignment: .center) {
-                        AsyncImage(url: movie.posterURL) { phase in
-                            switch phase {
-                            case .success(let image):
-                                image
-                                    .resizable()
-                                    .aspectRatio(contentMode: .fit)
-                                    .clipShape(RoundedRectangle(cornerRadius: 20))
-                                    .shadow(color: .black.opacity(0.3), radius: 15, x: 0, y: 8)
-                            case .empty:
-                                RoundedRectangle(cornerRadius: 20)
-                                    .fill(Color.gray.opacity(0.2))
-                                    .frame(height: 500)
-                                    .overlay {
-                                        ProgressView()
-                                    }
-                            case .failure:
-                                RoundedRectangle(cornerRadius: 20)
-                                    .fill(Color.gray.opacity(0.2))
-                                    .frame(height: 500)
-                                    .overlay {
-                                        Image(systemName: "film")
-                                            .font(.system(size: 60))
-                                            .foregroundStyle(.gray)
-                                    }
-                            @unknown default:
-                                EmptyView()
-                            }
-                        }
+                        MovieDetailPosterView(movie: movie, height: 500)
                         
                         // Play Button Overlay
                         if let trailer = trailer {
@@ -118,14 +101,73 @@ struct BrowseMovieDetailView: View {
                             
                             Text(movie.year)
                                 .foregroundStyle(AppTextColors.secondary)
+                            
+                            // Show number of seasons for TV shows
+                            if displayMovie.isTV, let seasons = displayMovie.numberOfSeasons {
+                                Text("•")
+                                    .foregroundStyle(AppTextColors.tertiary)
+                                
+                                HStack(spacing: 4) {
+                                    Image(systemName: "tv")
+                                        .foregroundStyle(AppTextColors.accent)
+                                    Text("\(seasons) \(seasons == 1 ? "Season" : "Seasons")")
+                                        .foregroundStyle(AppTextColors.secondary)
+                                }
+                            }
                         }
                         .font(.title3)
+                        
+                        // User Rating Display
+                        if let userRating = store.getRating(for: movie.id) {
+                            VStack(spacing: 8) {
+                                Text("Your Rating")
+                                    .font(.caption)
+                                    .foregroundStyle(AppTextColors.secondary)
+                                
+                                HStack(spacing: 4) {
+                                    StarRatingView(rating: .constant(userRating), starSize: 20, interactive: false)
+                                    Text(String(format: "%.1f", userRating))
+                                        .font(.subheadline)
+                                        .bold()
+                                        .foregroundStyle(AppTextColors.accent)
+                                }
+                            }
+                            .padding(.vertical, 8)
+                            .padding(.horizontal, 16)
+                            .background(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .fill(Color.white.opacity(0.1))
+                            )
+                        }
                         
                         Text(movie.overview)
                             .font(.body)
                             .foregroundStyle(AppTextColors.secondary)
                             .multilineTextAlignment(.leading)
                             .padding(.horizontal)
+                    }
+                    
+                    // Collection Section
+                    if let collection = collection {
+                        Divider()
+                            .background(Color.white.opacity(0.2))
+                            .padding(.horizontal)
+                        
+                        MovieCollectionCarousel(
+                            collection: collection,
+                            currentMovieId: movie.id,
+                            selectedMovie: $selectedCollectionMovie
+                        )
+                    } else if isLoadingCollection {
+                        VStack {
+                            ProgressView()
+                                .tint(AppTextColors.accent)
+                            Text("Loading collection...")
+                                .font(.caption)
+                                .foregroundStyle(AppTextColors.tertiary)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding()
                     }
                     
                     // Action Buttons
@@ -151,7 +193,7 @@ struct BrowseMovieDetailView: View {
                                     .font(.headline)
                                     .frame(maxWidth: .infinity)
                                     .padding()
-                                    .background(.blue.gradient)
+                                    .background(AppGradient.blue)
                                     .foregroundStyle(.white)
                                     .clipShape(RoundedRectangle(cornerRadius: 16))
                             }
@@ -172,14 +214,13 @@ struct BrowseMovieDetailView: View {
                             .clipShape(RoundedRectangle(cornerRadius: 16))
                         } else {
                             Button {
-                                store.markAsWatched(movie)
-                                dismiss()
+                                showRatingSheet = true
                             } label: {
                                 Label("Mark as Watched", systemImage: "checkmark.circle.fill")
                                     .font(.headline)
                                     .frame(maxWidth: .infinity)
                                     .padding()
-                                    .background(.green.gradient)
+                                    .background(AppGradient.green)
                                     .foregroundStyle(.white)
                                     .clipShape(RoundedRectangle(cornerRadius: 16))
                             }
@@ -198,8 +239,32 @@ struct BrowseMovieDetailView: View {
                     }
                 }
             }
+            .sheet(isPresented: $showRatingSheet) {
+                RatingSheet(
+                    rating: $currentRating,
+                    movie: movie,
+                    onSubmit: { rating in
+                        if rating > 0 {
+                            store.setRating(rating, for: movie)
+                        }
+                        store.markAsWatched(movie)
+                        dismiss()
+                    }
+                )
+                .presentationDetents([.medium])
+                .presentationDragIndicator(.visible)
+            }
             .task {
                 await loadTrailer()
+                await loadTVShowDetails()
+                await loadCollection()
+            }
+            .onAppear {
+                currentRating = store.getRating(for: movie.id) ?? 0.0
+            }
+            .sheet(item: $selectedCollectionMovie) { collectionMovie in
+                BrowseMovieDetailView(movie: collectionMovie)
+                    .environmentObject(store)
             }
         }
     }
@@ -215,6 +280,44 @@ struct BrowseMovieDetailView: View {
             )
         } catch {
             print("Error loading trailer: \(error)")
+        }
+    }
+    
+    private func loadTVShowDetails() async {
+        // Only load TV show details for TV shows
+        guard movie.isTV else { return }
+        
+        do {
+            // Fetch the full TV show details to get number of seasons
+            let tvShowDetails = try await store.movieService.fetchTVShowDetails(tvShowId: movie.id)
+            movieWithDetails = tvShowDetails
+        } catch {
+            print("Error loading TV show details: \(error)")
+        }
+    }
+    
+    private func loadCollection() async {
+        // Only load collections for movies, not TV shows
+        guard movie.isMovie else { return }
+        
+        isLoadingCollection = true
+        defer { isLoadingCollection = false }
+        
+        do {
+            // First, fetch movie details to check if it belongs to a collection
+            let movieDetails = try await store.movieService.fetchMovieDetails(movieId: movie.id)
+            
+            if let collectionInfo = movieDetails.belongsToCollection {
+                // Fetch the full collection details
+                let fetchedCollection = try await store.movieService.fetchCollection(collectionId: collectionInfo.id)
+                
+                // Only show collection if it has more than one movie
+                if fetchedCollection.parts.count > 1 {
+                    collection = fetchedCollection
+                }
+            }
+        } catch {
+            print("Error loading collection: \(error)")
         }
     }
 }

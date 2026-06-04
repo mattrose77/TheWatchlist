@@ -15,6 +15,7 @@ struct SearchView: View {
     @State private var isSearching = false
     @State private var selectedMovie: Movie?
     @State private var searchContentType: ContentType = .movies
+    @FocusState private var isSearchFocused: Bool
     
     let columns = [
         GridItem(.flexible(), spacing: 12),
@@ -75,6 +76,7 @@ struct SearchView: View {
                             LazyVGrid(columns: columns, spacing: 12) {
                                 ForEach(searchResults) { movie in
                                     Button {
+                                        isSearchFocused = false // Dismiss keyboard
                                         selectedMovie = movie
                                     } label: {
                                         MoviePosterView(movie: movie, width: 110)
@@ -111,6 +113,13 @@ struct SearchView: View {
             .sheet(item: $selectedMovie) { movie in
                 BrowseMovieDetailView(movie: movie)
                     .environmentObject(store)
+            }
+            .onChange(of: selectedMovie) { oldValue, newValue in
+                if newValue != nil {
+                    // Dismiss keyboard when sheet appears
+                    isSearchFocused = false
+                    UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+                }
             }
         }
     }

@@ -14,6 +14,8 @@ struct Movie: Identifiable, Codable, Hashable {
     let posterPath: String?
     let releaseDate: String?
     let voteAverage: Double
+    var mediaType: String? // "movie" or "tv"
+    var numberOfSeasons: Int? // For TV shows only
     
     enum CodingKeys: String, CodingKey {
         case id, title, name, overview
@@ -21,16 +23,20 @@ struct Movie: Identifiable, Codable, Hashable {
         case releaseDate = "release_date"
         case firstAirDate = "first_air_date"
         case voteAverage = "vote_average"
+        case mediaType = "media_type"
+        case numberOfSeasons = "number_of_seasons"
     }
     
     // Memberwise initializer for testing and previews
-    init(id: Int, title: String, overview: String, posterPath: String?, releaseDate: String?, voteAverage: Double) {
+    init(id: Int, title: String, overview: String, posterPath: String?, releaseDate: String?, voteAverage: Double, mediaType: String? = nil, numberOfSeasons: Int? = nil) {
         self.id = id
         self.title = title
         self.overview = overview
         self.posterPath = posterPath
         self.releaseDate = releaseDate
         self.voteAverage = voteAverage
+        self.mediaType = mediaType
+        self.numberOfSeasons = numberOfSeasons
     }
     
     init(from decoder: Decoder) throws {
@@ -60,6 +66,8 @@ struct Movie: Identifiable, Codable, Hashable {
         }
         
         voteAverage = try container.decode(Double.self, forKey: .voteAverage)
+        mediaType = try? container.decode(String.self, forKey: .mediaType)
+        numberOfSeasons = try? container.decode(Int.self, forKey: .numberOfSeasons)
     }
     
     // Encoder for when we need to save data
@@ -71,6 +79,8 @@ struct Movie: Identifiable, Codable, Hashable {
         try container.encodeIfPresent(posterPath, forKey: .posterPath)
         try container.encodeIfPresent(releaseDate, forKey: .releaseDate)
         try container.encode(voteAverage, forKey: .voteAverage)
+        try container.encodeIfPresent(mediaType, forKey: .mediaType)
+        try container.encodeIfPresent(numberOfSeasons, forKey: .numberOfSeasons)
     }
     
     var posterURL: URL? {
@@ -81,6 +91,14 @@ struct Movie: Identifiable, Codable, Hashable {
     var year: String {
         guard let releaseDate = releaseDate else { return "N/A" }
         return String(releaseDate.prefix(4))
+    }
+    
+    var isTV: Bool {
+        return mediaType == "tv"
+    }
+    
+    var isMovie: Bool {
+        return mediaType == "movie" || mediaType == nil // Default to movie if not specified
     }
 }
 

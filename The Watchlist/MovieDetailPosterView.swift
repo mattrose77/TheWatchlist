@@ -1,15 +1,15 @@
 //
-//  MoviePosterView.swift
+//  MovieDetailPosterView.swift
 //  The Watchlist
 //
-//  Created by Matt Rose on 20/05/2026.
+//  Created by Matt Rose on 03/06/2026.
 //
 
 import SwiftUI
 
-struct MoviePosterView: View {
+struct MovieDetailPosterView: View {
     let movie: Movie
-    let width: CGFloat
+    let height: CGFloat
     
     @State private var loader: ImageLoader?
     
@@ -18,44 +18,52 @@ struct MoviePosterView: View {
             if let loader = loader, let image = loader.image {
                 Image(uiImage: image)
                     .resizable()
-                    .aspectRatio(contentMode: .fill)
-                    .frame(width: width, height: width * 1.5)
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
-                    .shadow(color: .black.opacity(0.3), radius: 6, x: 0, y: 3)
+                    .aspectRatio(contentMode: .fit)
+                    .clipShape(RoundedRectangle(cornerRadius: 20))
+                    .shadow(color: .black.opacity(0.3), radius: 15, x: 0, y: 8)
             } else if let loader = loader, loader.hasError {
-                // Failed to load - show fallback
-                RoundedRectangle(cornerRadius: 12)
+                // Failed to load - show fallback with movie info
+                RoundedRectangle(cornerRadius: 20)
                     .fill(LinearGradient(
                         colors: [Color.gray.opacity(0.3), Color.gray.opacity(0.2)],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
                     ))
-                    .frame(width: width, height: width * 1.5)
+                    .frame(height: height)
                     .overlay {
-                        VStack(spacing: 8) {
+                        VStack(spacing: 16) {
                             Image(systemName: "film")
-                                .font(.title2)
+                                .font(.system(size: 60))
                                 .foregroundStyle(.white.opacity(0.6))
                             
                             Text(movie.title)
-                                .font(.caption2)
+                                .font(.title3)
+                                .fontWeight(.semibold)
                                 .multilineTextAlignment(.center)
-                                .foregroundStyle(.white.opacity(0.8))
-                                .lineLimit(3)
-                                .padding(.horizontal, 8)
+                                .foregroundStyle(.white.opacity(0.9))
+                                .padding(.horizontal, 40)
+                            
+                            Text("Poster unavailable")
+                                .font(.caption)
+                                .foregroundStyle(.white.opacity(0.6))
                         }
                     }
-                    .shadow(color: .black.opacity(0.2), radius: 6, x: 0, y: 3)
+                    .shadow(color: .black.opacity(0.3), radius: 15, x: 0, y: 8)
             } else {
                 // Loading state
-                RoundedRectangle(cornerRadius: 12)
+                RoundedRectangle(cornerRadius: 20)
                     .fill(Color.gray.opacity(0.2))
-                    .frame(width: width, height: width * 1.5)
+                    .frame(height: height)
                     .overlay {
-                        ProgressView()
-                            .tint(.white)
+                        VStack(spacing: 12) {
+                            ProgressView()
+                                .tint(.white)
+                            Text("Loading poster...")
+                                .font(.caption)
+                                .foregroundStyle(.white.opacity(0.6))
+                        }
                     }
-                    .shadow(color: .black.opacity(0.2), radius: 6, x: 0, y: 3)
+                    .shadow(color: .black.opacity(0.2), radius: 15, x: 0, y: 8)
             }
         }
         .onAppear {

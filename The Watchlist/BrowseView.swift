@@ -51,9 +51,8 @@ struct BrowseView: View {
                 .padding(.bottom, 4)
                 .onChange(of: store.selectedContentType) { oldValue, newValue in
                     Task {
-                        // Reset to appropriate category when switching content type
-                        let category: MovieCategory = newValue == .movies ? .topRated : .popular
-                        await store.loadMovies(for: category, contentType: newValue)
+                        // Always reset to Trending when switching content type
+                        await store.loadMovies(for: .trending, contentType: newValue)
                     }
                 }
                 

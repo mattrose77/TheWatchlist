@@ -9,9 +9,15 @@ import SwiftUI
 
 @main
 struct The_WatchlistApp: App {
+    @AppStorage("hasSeenWelcome") private var hasSeenWelcome = false
+    
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            if hasSeenWelcome {
+                ContentView()
+            } else {
+                WelcomeView(hasSeenWelcome: $hasSeenWelcome)
+            }
         }
     }
 }

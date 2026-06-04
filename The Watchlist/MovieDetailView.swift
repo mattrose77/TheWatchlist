@@ -14,6 +14,9 @@ struct MovieDetailView: View {
     let movie: Movie
     let isInWatchlist: Bool
     
+    @State private var showRatingSheet = false
+    @State private var currentRating: Double = 0.0
+    
     var body: some View {
         NavigationStack {
             ZStack {
@@ -24,35 +27,8 @@ struct MovieDetailView: View {
                 ScrollView {
                 VStack(spacing: 24) {
                     // Poster
-                    AsyncImage(url: movie.posterURL) { phase in
-                        switch phase {
-                        case .success(let image):
-                            image
-                                .resizable()
-                                .aspectRatio(contentMode: .fit)
-                                .clipShape(RoundedRectangle(cornerRadius: 20))
-                                .shadow(color: .black.opacity(0.3), radius: 15, x: 0, y: 8)
-                        case .empty:
-                            RoundedRectangle(cornerRadius: 20)
-                                .fill(Color.gray.opacity(0.2))
-                                .frame(height: 500)
-                                .overlay {
-                                    ProgressView()
-                                }
-                        case .failure:
-                            RoundedRectangle(cornerRadius: 20)
-                                .fill(Color.gray.opacity(0.2))
-                                .frame(height: 500)
-                                .overlay {
-                                    Image(systemName: "film")
-                                        .font(.system(size: 60))
-                                        .foregroundStyle(.gray)
-                                }
-                        @unknown default:
-                            EmptyView()
-                        }
-                    }
-                    .frame(maxWidth: 300)
+                    MovieDetailPosterView(movie: movie, height: 500)
+                        .frame(maxWidth: 300)
                     
                     // Movie Info
                     VStack(spacing: 16) {
@@ -76,8 +52,44 @@ struct MovieDetailView: View {
                             
                             Text(movie.year)
                                 .foregroundStyle(AppTextColors.secondary)
+                            
+                            // Show number of seasons for TV shows
+                            if movie.isTV, let seasons = movie.numberOfSeasons {
+                                Text("•")
+                                    .foregroundStyle(AppTextColors.tertiary)
+                                
+                                HStack(spacing: 4) {
+                                    Image(systemName: "tv")
+                                        .foregroundStyle(AppTextColors.accent)
+                                    Text("\(seasons) \(seasons == 1 ? "Season" : "Seasons")")
+                                        .foregroundStyle(AppTextColors.secondary)
+                                }
+                            }
                         }
                         .font(.title3)
+                        
+                        // User Rating Display
+                        if let userRating = store.getRating(for: movie.id) {
+                            VStack(spacing: 8) {
+                                Text("Your Rating")
+                                    .font(.caption)
+                                    .foregroundStyle(AppTextColors.secondary)
+                                
+                                HStack(spacing: 4) {
+                                    StarRatingView(rating: .constant(userRating), starSize: 20, interactive: false)
+                                    Text(String(format: "%.1f", userRating))
+                                        .font(.subheadline)
+                                        .bold()
+                                        .foregroundStyle(AppTextColors.accent)
+                                }
+                            }
+                            .padding(.vertical, 8)
+                            .padding(.horizontal, 16)
+                            .background(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .fill(Color.white.opacity(0.1))
+                            )
+                        }
                         
                         Text(movie.overview)
                             .font(.body)
@@ -90,14 +102,13 @@ struct MovieDetailView: View {
                     if isInWatchlist {
                         VStack(spacing: 12) {
                             Button {
-                                store.markAsWatched(movie)
-                                dismiss()
+                                showRatingSheet = true
                             } label: {
                                 Label("Mark as Watched", systemImage: "checkmark.circle.fill")
                                     .font(.headline)
                                     .frame(maxWidth: .infinity)
                                     .padding()
-                                    .background(.green.gradient)
+                                    .background(AppGradient.green)
                                     .foregroundStyle(.white)
                                     .clipShape(RoundedRectangle(cornerRadius: 16))
                             }
@@ -117,17 +128,38 @@ struct MovieDetailView: View {
                         }
                         .padding(.horizontal)
                     } else {
-                        Button(role: .destructive) {
-                            store.removeFromArchive(movie)
-                            dismiss()
-                        } label: {
-                            Label("Remove from Archive", systemImage: "trash")
-                                .font(.headline)
-                                .frame(maxWidth: .infinity)
-                                .padding()
-                                .background(Color(.systemGray5))
-                                .foregroundStyle(.red)
-                                .clipShape(RoundedRectangle(cornerRadius: 16))
+                        VStack(spacing: 12) {
+                            // Edit Rating Button
+                            if store.getRating(for: movie.id) != nil {
+                                Button {
+                                    showRatingSheet = true
+                                } label: {
+                                    Label("Edit Rating", systemImage: "star.fill")
+                                        .font(.headline)
+                                        .frame(maxWidth: .infinity)
+                                        .padding()
+                                        .background(
+                                            RoundedRectangle(cornerRadius: 16)
+                                                .fill(AppGradient.gold.opacity(0.6))
+                                        )
+                                        .foregroundStyle(AppTextColors.primary)
+                                }
+                            }
+                            
+                            Button(role: .destructive) {
+                                store.removeFromArchive(movie)
+                                // Also remove rating
+                                store.userRatings.removeValue(forKey: movie.id)
+                                dismiss()
+                            } label: {
+                                Label("Remove from Archive", systemImage: "trash")
+                                    .font(.headline)
+                                    .frame(maxWidth: .infinity)
+                                    .padding()
+                                    .background(Color(.systemGray5))
+                                    .foregroundStyle(.red)
+                                    .clipShape(RoundedRectangle(cornerRadius: 16))
+                            }
                         }
                         .padding(.horizontal)
                     }
@@ -141,6 +173,24 @@ struct MovieDetailView: View {
                         dismiss()
                     }
                 }
+            }
+            .sheet(isPresented: $showRatingSheet) {
+                RatingSheet(
+                    rating: $currentRating,
+                    movie: movie,
+                    onSubmit: { rating in
+                        if rating > 0 {
+                            store.setRating(rating, for: movie)
+                        }
+                        store.markAsWatched(movie)
+                        dismiss()
+                    }
+                )
+                .presentationDetents([.medium])
+                .presentationDragIndicator(.visible)
+            }
+            .onAppear {
+                currentRating = store.getRating(for: movie.id) ?? 0.0
             }
         }
     }

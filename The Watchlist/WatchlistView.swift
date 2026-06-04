@@ -10,12 +10,21 @@ import SwiftUI
 struct WatchlistView: View {
     @EnvironmentObject var store: MovieStore
     @State private var selectedMovie: Movie?
+    @State private var selectedContentType: ContentType = .movies
     
     let columns = [
         GridItem(.flexible(), spacing: 12),
         GridItem(.flexible(), spacing: 12),
         GridItem(.flexible(), spacing: 12)
     ]
+    
+    var filteredWatchlist: [Movie] {
+        if selectedContentType == .movies {
+            return store.watchlist.filter { $0.isMovie }
+        } else {
+            return store.watchlist.filter { $0.isTV }
+        }
+    }
     
     var body: some View {
         NavigationStack {
@@ -24,30 +33,44 @@ struct WatchlistView: View {
                 AppGradient.background
                     .ignoresSafeArea()
                 
-                ScrollView {
-                if store.watchlist.isEmpty {
-                    ContentUnavailableView {
-                        Label("No Movies Yet", systemImage: "popcorn")
-                            .foregroundStyle(AppTextColors.primary)
-                    } description: {
-                        Text("Browse movies and add them to your watchlist")
-                            .foregroundStyle(AppTextColors.secondary)
-                    }
-                    .padding(.top, 100)
-                } else {
-                    LazyVGrid(columns: columns, spacing: 12) {
-                        ForEach(store.watchlist) { movie in
-                            Button {
-                                selectedMovie = movie
-                            } label: {
-                                MoviePosterView(movie: movie, width: 110)
-                            }
-                            .buttonStyle(.plain)
+                VStack(spacing: 0) {
+                    // Content Type Picker (Movies / TV Shows)
+                    Picker("Content Type", selection: $selectedContentType) {
+                        ForEach(ContentType.allCases, id: \.self) { type in
+                            Text(type.rawValue).tag(type)
                         }
                     }
-                    .padding()
+                    .pickerStyle(.segmented)
+                    .padding(.horizontal)
+                    .padding(.top, 8)
+                    .padding(.bottom, 12)
+                    
+                    ScrollView {
+                        if filteredWatchlist.isEmpty {
+                            ContentUnavailableView {
+                                Label(selectedContentType == .movies ? "No Movies Yet" : "No TV Shows Yet", 
+                                      systemImage: "popcorn")
+                                    .foregroundStyle(AppTextColors.primary)
+                            } description: {
+                                Text("Browse \(selectedContentType.rawValue.lowercased()) and add them to your watchlist")
+                                    .foregroundStyle(AppTextColors.secondary)
+                            }
+                            .padding(.top, 100)
+                        } else {
+                            LazyVGrid(columns: columns, spacing: 12) {
+                                ForEach(filteredWatchlist) { movie in
+                                    Button {
+                                        selectedMovie = movie
+                                    } label: {
+                                        MoviePosterView(movie: movie, width: 110)
+                                    }
+                                    .buttonStyle(.plain)
+                                }
+                            }
+                            .padding()
+                        }
+                    }
                 }
-            }
             }
             .navigationTitle("Watchlist")
             .sheet(item: $selectedMovie) { movie in
