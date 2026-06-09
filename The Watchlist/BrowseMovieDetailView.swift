@@ -19,6 +19,8 @@ struct BrowseMovieDetailView: View {
     @State private var isLoadingCollection = false
     @State private var selectedCollectionMovie: Movie?
     @State private var movieWithDetails: Movie?
+    @State private var watchProviders: [WatchProvider] = []
+    @State private var isLoadingWatchProviders = false
     
     let movie: Movie
     
@@ -88,12 +90,18 @@ struct BrowseMovieDetailView: View {
                             .multilineTextAlignment(.center)
                         
                         HStack(spacing: 20) {
-                            HStack {
-                                Image(systemName: "star.fill")
-                                    .foregroundStyle(AppTextColors.rating)
-                                Text(String(format: "%.1f", movie.voteAverage))
-                                    .bold()
-                                    .foregroundStyle(AppTextColors.primary)
+                            if movie.voteAverage > 0.0 {
+                                HStack {
+                                    Image(systemName: "star.fill")
+                                        .foregroundStyle(AppTextColors.rating)
+                                    Text(String(format: "%.1f", movie.voteAverage))
+                                        .bold()
+                                        .foregroundStyle(AppTextColors.primary)
+                                }
+                            } else {
+                                Text("Not Released")
+                                    .font(.subheadline)
+                                    .foregroundStyle(AppTextColors.secondary)
                             }
                             
                             Text("•")
@@ -168,6 +176,12 @@ struct BrowseMovieDetailView: View {
                         }
                         .frame(maxWidth: .infinity)
                         .padding()
+                    }
+                    
+                    // Where to Watch Section
+                    if !isLoadingWatchProviders {
+                        WatchProvidersView(providers: watchProviders)
+                            .padding(.horizontal)
                     }
                     
                     // Action Buttons
@@ -258,6 +272,7 @@ struct BrowseMovieDetailView: View {
                 await loadTrailer()
                 await loadTVShowDetails()
                 await loadCollection()
+                await loadWatchProviders()
             }
             .onAppear {
                 currentRating = store.getRating(for: movie.id) ?? 0.0
@@ -318,6 +333,22 @@ struct BrowseMovieDetailView: View {
             }
         } catch {
             print("Error loading collection: \(error)")
+        }
+    }
+    
+    private func loadWatchProviders() async {
+        isLoadingWatchProviders = true
+        defer { isLoadingWatchProviders = false }
+        
+        do {
+            if let providerData = try await store.movieService.fetchWatchProviders(
+                for: movie.id,
+                contentType: store.selectedContentType
+            ) {
+                watchProviders = providerData.streamingProviders
+            }
+        } catch {
+            print("Error loading watch providers: \(error)")
         }
     }
 }

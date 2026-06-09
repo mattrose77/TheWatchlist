@@ -42,7 +42,6 @@ struct WatchlistView: View {
                     }
                     .pickerStyle(.segmented)
                     .padding(.horizontal)
-                    .padding(.top, 8)
                     .padding(.bottom, 12)
                     
                     ScrollView {
@@ -73,6 +72,7 @@ struct WatchlistView: View {
                 }
             }
             .navigationTitle("Watchlist")
+            .navigationBarTitleDisplayMode(.inline)
             .sheet(item: $selectedMovie) { movie in
                 MovieDetailView(movie: movie, isInWatchlist: true)
                     .environmentObject(store)

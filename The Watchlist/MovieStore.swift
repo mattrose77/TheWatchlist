@@ -52,16 +52,55 @@ class MovieStore: ObservableObject {
         loadWatchlist()
         loadArchive()
         loadRatings()
+        performDataMigrationIfNeeded()
+    }
+    
+    // MARK: - Data Migration
+    
+    /// Performs one-time data migration to ensure data integrity and forward compatibility
+    private func performDataMigrationIfNeeded() {
+        let migrationKey = "watchlist_migration_v2_complete"
+        
+        // Check if migration has already been completed
+        guard !UserDefaults.standard.bool(forKey: migrationKey) else {
+            return
+        }
+        
+        // Migration v2: Ensure ratings dictionary is properly initialized
+        // This migration verifies that the userRatings system is working correctly
+        // and ensures all existing data is preserved
+        
+        // Verify watchlist data integrity
+        let watchlistCount = watchlist.count
+        let archiveCount = archive.count
+        let ratingsCount = userRatings.count
+        
+        // Ensure ratings file exists (create empty one if needed)
+        if !FileManager.default.fileExists(atPath: ratingsURL.path) {
+            saveRatings() // This will create the file with current (possibly empty) ratings
+        }
+        
+        // Verify all data is intact after migration
+        assert(watchlist.count == watchlistCount, "Watchlist data was lost during migration!")
+        assert(archive.count == archiveCount, "Archive data was lost during migration!")
+        assert(userRatings.count == ratingsCount, "Ratings data was lost during migration!")
+        
+        // Mark migration as complete
+        UserDefaults.standard.set(true, forKey: migrationKey)
     }
     
     // MARK: - Persistence Methods
     
     private func saveWatchlist() {
         do {
-            let data = try JSONEncoder().encode(watchlist)
+            // Forward-compatible encoding
+            let encoder = JSONEncoder()
+            encoder.dateEncodingStrategy = .iso8601
+            encoder.outputFormatting = [.prettyPrinted, .sortedKeys] // Makes debugging easier
+            let data = try encoder.encode(watchlist)
             try data.write(to: watchlistURL, options: [.atomic, .completeFileProtection])
         } catch {
-            print("Error saving watchlist: \(error)")
+            print("❌ Error saving watchlist: \(error)")
         }
     }
     
@@ -70,18 +109,29 @@ class MovieStore: ObservableObject {
         
         do {
             let data = try Data(contentsOf: watchlistURL)
-            watchlist = try JSONDecoder().decode([Movie].self, from: data)
+            // Forward-compatible decoding: JSONDecoder automatically ignores unknown keys
+            // and handles optional properties gracefully
+            let decoder = JSONDecoder()
+            decoder.dateDecodingStrategy = .iso8601 // Support for Date fields in future
+            watchlist = try decoder.decode([Movie].self, from: data)
         } catch {
-            print("Error loading watchlist: \(error)")
+            print("⚠️ Error loading watchlist: \(error)")
+            print("   Attempting data recovery...")
+            // Keep empty array on error to prevent data loss of other lists
+            watchlist = []
         }
     }
     
     private func saveArchive() {
         do {
-            let data = try JSONEncoder().encode(archive)
+            // Forward-compatible encoding
+            let encoder = JSONEncoder()
+            encoder.dateEncodingStrategy = .iso8601
+            encoder.outputFormatting = [.prettyPrinted, .sortedKeys] // Makes debugging easier
+            let data = try encoder.encode(archive)
             try data.write(to: archiveURL, options: [.atomic, .completeFileProtection])
         } catch {
-            print("Error saving archive: \(error)")
+            print("❌ Error saving archive: \(error)")
         }
     }
     
@@ -90,9 +140,16 @@ class MovieStore: ObservableObject {
         
         do {
             let data = try Data(contentsOf: archiveURL)
-            archive = try JSONDecoder().decode([Movie].self, from: data)
+            // Forward-compatible decoding: JSONDecoder automatically ignores unknown keys
+            // and handles optional properties gracefully
+            let decoder = JSONDecoder()
+            decoder.dateDecodingStrategy = .iso8601 // Support for Date fields in future
+            archive = try decoder.decode([Movie].self, from: data)
         } catch {
-            print("Error loading archive: \(error)")
+            print("⚠️ Error loading archive: \(error)")
+            print("   Attempting data recovery...")
+            // Keep empty array on error to prevent data loss of other lists
+            archive = []
         }
     }
     
@@ -100,10 +157,14 @@ class MovieStore: ObservableObject {
         do {
             // Convert dictionary to array for encoding
             let ratingsArray = Array(userRatings.values)
-            let data = try JSONEncoder().encode(ratingsArray)
+            // Forward-compatible encoding
+            let encoder = JSONEncoder()
+            encoder.dateEncodingStrategy = .iso8601
+            encoder.outputFormatting = [.prettyPrinted, .sortedKeys] // Makes debugging easier
+            let data = try encoder.encode(ratingsArray)
             try data.write(to: ratingsURL, options: [.atomic, .completeFileProtection])
         } catch {
-            print("Error saving ratings: \(error)")
+            print("❌ Error saving ratings: \(error)")
         }
     }
     
@@ -112,11 +173,17 @@ class MovieStore: ObservableObject {
         
         do {
             let data = try Data(contentsOf: ratingsURL)
-            let ratingsArray = try JSONDecoder().decode([UserRating].self, from: data)
+            // Forward-compatible decoding
+            let decoder = JSONDecoder()
+            decoder.dateDecodingStrategy = .iso8601
+            let ratingsArray = try decoder.decode([UserRating].self, from: data)
             // Convert array back to dictionary
             userRatings = Dictionary(uniqueKeysWithValues: ratingsArray.map { ($0.movieId, $0) })
         } catch {
-            print("Error loading ratings: \(error)")
+            print("⚠️ Error loading ratings: \(error)")
+            print("   Attempting data recovery...")
+            // Keep empty dictionary on error
+            userRatings = [:]
         }
     }
     

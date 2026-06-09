@@ -102,6 +102,89 @@ struct MovieDetails: Codable {
     }
 }
 
+struct WatchProvider: Codable, Identifiable {
+    let logoPath: String
+    let providerId: Int
+    let providerName: String
+    let displayPriority: Int
+    
+    var id: Int { providerId }
+    
+    enum CodingKeys: String, CodingKey {
+        case logoPath = "logo_path"
+        case providerId = "provider_id"
+        case providerName = "provider_name"
+        case displayPriority = "display_priority"
+    }
+    
+    var logoURL: URL? {
+        // logoPath from TMDB includes the leading slash
+        guard !logoPath.isEmpty else { return nil }
+        let urlString = "https://image.tmdb.org/t/p/w92\(logoPath)"
+        return URL(string: urlString)
+    }
+}
+
+struct WatchProviderData: Codable {
+    let link: String?
+    let flatrate: [WatchProvider]?
+    let buy: [WatchProvider]?
+    let rent: [WatchProvider]?
+    
+    // Get only streaming providers (flatrate)
+    var streamingProviders: [WatchProvider] {
+        guard let flatrate = flatrate else { return [] }
+        return flatrate.sorted { $0.displayPriority < $1.displayPriority }
+    }
+    
+    // Get all unique providers (prioritize streaming)
+    var allProviders: [WatchProvider] {
+        var providers: [WatchProvider] = []
+        var seenIds = Set<Int>()
+        
+        // Add streaming providers first
+        if let flatrate = flatrate {
+            for provider in flatrate {
+                if !seenIds.contains(provider.providerId) {
+                    providers.append(provider)
+                    seenIds.insert(provider.providerId)
+                }
+            }
+        }
+        
+        // Then buy options
+        if let buy = buy {
+            for provider in buy {
+                if !seenIds.contains(provider.providerId) {
+                    providers.append(provider)
+                    seenIds.insert(provider.providerId)
+                }
+            }
+        }
+        
+        // Finally rent options
+        if let rent = rent {
+            for provider in rent {
+                if !seenIds.contains(provider.providerId) {
+                    providers.append(provider)
+                    seenIds.insert(provider.providerId)
+                }
+            }
+        }
+        
+        return providers.sorted { $0.displayPriority < $1.displayPriority }
+    }
+}
+
+struct WatchProviderResults: Codable {
+    let results: [String: WatchProviderData]
+    
+    // Get UK providers
+    var ukProviders: WatchProviderData? {
+        return results["GB"]
+    }
+}
+
 @MainActor
 class MovieService: ObservableObject {
     private let apiKey = "3e53f26a4303447ddc429900ac7ced1a"
@@ -111,6 +194,10 @@ class MovieService: ObservableObject {
         var seenIDs = Set<Int>()
         var allMovies: [Movie] = []
         let mediaTypeString = type == .movies ? "movie" : "tv"
+        
+        // Get the start of today for date comparison (ignoring time)
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: Date())
         
         // Fetch multiple pages (default 5 pages = 100 movies)
         for page in 1...pages {
@@ -158,6 +245,27 @@ class MovieService: ObservableObject {
                 // Skip duplicates
                 guard !seenIDs.contains(movie.id) else { return nil }
                 seenIDs.insert(movie.id)
+                
+                // For upcoming movies, only include movies with future release dates
+                if category == .upcoming {
+                    // If no release date, keep it (might be TBA)
+                    guard let releaseDateString = movie.releaseDate else {
+                        var updatedMovie = movie
+                        updatedMovie.mediaType = mediaTypeString
+                        return updatedMovie
+                    }
+                    
+                    let dateFormatter = DateFormatter()
+                    dateFormatter.dateFormat = "yyyy-MM-dd"
+                    dateFormatter.locale = Locale(identifier: "en_US_POSIX")
+                    dateFormatter.timeZone = TimeZone(secondsFromGMT: 0)
+                    
+                    if let releaseDate = dateFormatter.date(from: releaseDateString) {
+                        let releaseDateStartOfDay = calendar.startOfDay(for: releaseDate)
+                        // Only include movies releasing tomorrow or later
+                        guard releaseDateStartOfDay > today else { return nil }
+                    }
+                }
                 
                 var updatedMovie = movie
                 updatedMovie.mediaType = mediaTypeString
@@ -283,5 +391,20 @@ class MovieService: ObservableObject {
         tvShow.mediaType = "tv"
         
         return tvShow
+    }
+    
+    // Fetch watch providers (where to watch)
+    func fetchWatchProviders(for movieId: Int, contentType: ContentType) async throws -> WatchProviderData? {
+        let mediaType = contentType == .movies ? "movie" : "tv"
+        let urlString = "\(baseURL)/\(mediaType)/\(movieId)/watch/providers?api_key=\(apiKey)"
+        
+        guard let url = URL(string: urlString) else {
+            throw URLError(.badURL)
+        }
+        
+        let (data, _) = try await URLSession.shared.data(from: url)
+        let response = try JSONDecoder().decode(WatchProviderResults.self, from: data)
+        
+        return response.ukProviders
     }
 }

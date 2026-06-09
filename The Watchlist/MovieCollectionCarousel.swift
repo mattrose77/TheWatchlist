@@ -14,7 +14,7 @@ struct MovieCollectionCarousel: View {
     @Binding var selectedMovie: Movie?
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: 8) {
             // Section Header
             VStack(alignment: .leading, spacing: 8) {
                 HStack {
@@ -33,7 +33,7 @@ struct MovieCollectionCarousel: View {
             
             // Horizontal Scroll of Collection Movies
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 16) {
+                HStack(spacing: 12) {
                     ForEach(collection.parts) { movie in
                         // Don't show the current movie
                         if movie.id != currentMovieId {
@@ -90,7 +90,7 @@ struct CollectionMoviePoster: View {
                     EmptyView()
                 }
             }
-            .frame(width: 150, height: 225)
+            .frame(width: 110, height: 165)
             .clipShape(RoundedRectangle(cornerRadius: 12))
             .overlay {
                 RoundedRectangle(cornerRadius: 12)
@@ -99,30 +99,30 @@ struct CollectionMoviePoster: View {
             
             // Status Badge
             if isWatched {
-                Image(systemName: "checkmark.circle.fill")
-                    .font(.title2)
-                    .foregroundStyle(.white)
-                    .background(
-                        Circle()
-                            .fill(.green)
-                            .padding(-4)
-                    )
-                    .padding(8)
-                    .shadow(radius: 4)
+                Circle()
+                    .fill(.green)
+                    .frame(width: 24, height: 24)
+                    .overlay {
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 12, weight: .bold))
+                            .foregroundStyle(.white)
+                    }
+                    .shadow(color: .black.opacity(0.3), radius: 4, x: 0, y: 2)
+                    .offset(x: -8, y: 8)
             } else if isInWatchlist {
-                Image(systemName: "bookmark.fill")
-                    .font(.title3)
-                    .foregroundStyle(.white)
-                    .background(
-                        Circle()
-                            .fill(AppGradient.blue)
-                            .padding(-4)
-                    )
-                    .padding(8)
-                    .shadow(radius: 4)
+                Circle()
+                    .fill(.blue)
+                    .frame(width: 24, height: 24)
+                    .overlay {
+                        Image(systemName: "bookmark.fill")
+                            .font(.system(size: 11))
+                            .foregroundStyle(.white)
+                    }
+                    .shadow(color: .black.opacity(0.3), radius: 4, x: 0, y: 2)
+                    .offset(x: -8, y: 8)
             }
         }
-        .frame(width: 150, height: 225)
+        .frame(width: 110, height: 165)
     }
 }
 

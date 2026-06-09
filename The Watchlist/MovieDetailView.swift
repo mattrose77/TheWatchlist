@@ -16,6 +16,12 @@ struct MovieDetailView: View {
     
     @State private var showRatingSheet = false
     @State private var currentRating: Double = 0.0
+    @State private var watchProviders: [WatchProvider] = []
+    @State private var isLoadingWatchProviders = false
+    @State private var collection: CollectionDetails?
+    @State private var isLoadingCollection = false
+    @State private var selectedCollectionMovie: Movie?
+    @State private var isDescriptionExpanded = false
     
     var body: some View {
         NavigationStack {
@@ -39,12 +45,18 @@ struct MovieDetailView: View {
                             .multilineTextAlignment(.center)
                         
                         HStack(spacing: 20) {
-                            HStack {
-                                Image(systemName: "star.fill")
-                                    .foregroundStyle(AppTextColors.rating)
-                                Text(String(format: "%.1f", movie.voteAverage))
-                                    .bold()
-                                    .foregroundStyle(AppTextColors.primary)
+                            if movie.voteAverage > 0.0 {
+                                HStack {
+                                    Image(systemName: "star.fill")
+                                        .foregroundStyle(AppTextColors.rating)
+                                    Text(String(format: "%.1f", movie.voteAverage))
+                                        .bold()
+                                        .foregroundStyle(AppTextColors.primary)
+                                }
+                            } else {
+                                Text("Not Released")
+                                    .font(.subheadline)
+                                    .foregroundStyle(AppTextColors.secondary)
                             }
                             
                             Text("•")
@@ -95,6 +107,49 @@ struct MovieDetailView: View {
                             .font(.body)
                             .foregroundStyle(AppTextColors.secondary)
                             .multilineTextAlignment(.leading)
+                            .lineLimit(isDescriptionExpanded ? nil : 3)
+                            .padding(.horizontal)
+                        
+                        // Show More / Show Less Button
+                        Button {
+                            withAnimation(.easeInOut(duration: 0.3)) {
+                                isDescriptionExpanded.toggle()
+                            }
+                        } label: {
+                            Text(isDescriptionExpanded ? "Show Less" : "Show More")
+                                .font(.subheadline)
+                                .foregroundStyle(AppTextColors.secondary)
+                                .padding(.horizontal)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    
+                    // Collection Section
+                    if let collection = collection {
+                        Divider()
+                            .background(Color.white.opacity(0.2))
+                            .padding(.horizontal)
+                        
+                        MovieCollectionCarousel(
+                            collection: collection,
+                            currentMovieId: movie.id,
+                            selectedMovie: $selectedCollectionMovie
+                        )
+                    } else if isLoadingCollection {
+                        VStack {
+                            ProgressView()
+                                .tint(AppTextColors.accent)
+                            Text("Loading collection...")
+                                .font(.caption)
+                                .foregroundStyle(AppTextColors.tertiary)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding()
+                    }
+                    
+                    // Where to Watch Section
+                    if !isLoadingWatchProviders {
+                        WatchProvidersView(providers: watchProviders)
                             .padding(.horizontal)
                     }
                     
@@ -156,8 +211,8 @@ struct MovieDetailView: View {
                                     .font(.headline)
                                     .frame(maxWidth: .infinity)
                                     .padding()
-                                    .background(Color(.systemGray5))
-                                    .foregroundStyle(.red)
+                                    .background(Color.white.opacity(0.1))
+                                    .foregroundStyle(.red.opacity(0.9))
                                     .clipShape(RoundedRectangle(cornerRadius: 16))
                             }
                         }
@@ -182,8 +237,13 @@ struct MovieDetailView: View {
                         if rating > 0 {
                             store.setRating(rating, for: movie)
                         }
-                        store.markAsWatched(movie)
-                        dismiss()
+                        // Only mark as watched if it's in the watchlist
+                        if isInWatchlist {
+                            store.markAsWatched(movie)
+                            dismiss()
+                        }
+                        // If it's already in archive, just update the rating (no dismiss)
+                        // The sheet will dismiss itself, but we don't close the detail view
                     }
                 )
                 .presentationDetents([.medium])
@@ -192,6 +252,56 @@ struct MovieDetailView: View {
             .onAppear {
                 currentRating = store.getRating(for: movie.id) ?? 0.0
             }
+            .task {
+                await loadWatchProviders()
+                await loadCollection()
+            }
+            .sheet(item: $selectedCollectionMovie) { collectionMovie in
+                MovieDetailView(movie: collectionMovie, isInWatchlist: store.watchlist.contains(where: { $0.id == collectionMovie.id }))
+                    .environmentObject(store)
+            }
+        }
+    }
+    
+    private func loadCollection() async {
+        // Only load collections for movies, not TV shows
+        guard movie.isMovie else { return }
+        
+        isLoadingCollection = true
+        defer { isLoadingCollection = false }
+        
+        do {
+            // First, fetch movie details to check if it belongs to a collection
+            let movieDetails = try await store.movieService.fetchMovieDetails(movieId: movie.id)
+            
+            if let collectionInfo = movieDetails.belongsToCollection {
+                // Fetch the full collection details
+                let fetchedCollection = try await store.movieService.fetchCollection(collectionId: collectionInfo.id)
+                
+                // Only show collection if it has more than one movie
+                if fetchedCollection.parts.count > 1 {
+                    collection = fetchedCollection
+                }
+            }
+        } catch {
+            print("Error loading collection: \(error)")
+        }
+    }
+    
+    private func loadWatchProviders() async {
+        isLoadingWatchProviders = true
+        defer { isLoadingWatchProviders = false }
+        
+        do {
+            let contentType: ContentType = movie.isTV ? .tv : .movies
+            if let providerData = try await store.movieService.fetchWatchProviders(
+                for: movie.id,
+                contentType: contentType
+            ) {
+                watchProviders = providerData.streamingProviders
+            }
+        } catch {
+            print("Error loading watch providers: \(error)")
         }
     }
 }
