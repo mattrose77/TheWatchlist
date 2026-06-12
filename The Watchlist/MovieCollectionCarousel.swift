@@ -100,26 +100,28 @@ struct CollectionMoviePoster: View {
             // Status Badge
             if isWatched {
                 Circle()
-                    .fill(.green)
-                    .frame(width: 24, height: 24)
+                    .strokeBorder(.green, lineWidth: 2)
+                    .background(Circle().fill(.black.opacity(0.4)))
+                    .frame(width: 20, height: 20)
                     .overlay {
                         Image(systemName: "checkmark")
-                            .font(.system(size: 12, weight: .bold))
-                            .foregroundStyle(.white)
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundStyle(.green)
                     }
                     .shadow(color: .black.opacity(0.3), radius: 4, x: 0, y: 2)
-                    .offset(x: -8, y: 8)
+                    .offset(x: -4, y: 4)
             } else if isInWatchlist {
                 Circle()
-                    .fill(.blue)
-                    .frame(width: 24, height: 24)
+                    .strokeBorder(.blue, lineWidth: 2)
+                    .background(Circle().fill(.black.opacity(0.4)))
+                    .frame(width: 20, height: 20)
                     .overlay {
                         Image(systemName: "bookmark.fill")
-                            .font(.system(size: 11))
+                            .font(.system(size: 9))
                             .foregroundStyle(.white)
                     }
                     .shadow(color: .black.opacity(0.3), radius: 4, x: 0, y: 2)
-                    .offset(x: -8, y: 8)
+                    .offset(x: -4, y: 4)
             }
         }
         .frame(width: 110, height: 165)
@@ -140,7 +142,13 @@ struct CollectionMoviePoster: View {
         ]
     )
     
-    MovieCollectionCarousel(collection: sampleCollection, currentMovieId: 238, selectedMovie: .constant(nil))
-        .environmentObject(MovieStore())
+    // Create a store with Godfather Part III in the archive (watched)
+    let previewStore = MovieStore()
+    previewStore.archive = [
+        Movie(id: 242, title: "The Godfather Part III", overview: "In the midst of trying to legitimize his business dealings in 1979 New York and Italy, aging mafia don Michael Corleone seeks to avow for his sins while taking a young protege under his wing.", posterPath: "/lm3pQ2QoQ16pextRsmnUbG2onES.jpg", releaseDate: "1990-12-25", voteAverage: 7.4, mediaType: "movie")
+    ]
+    
+    return MovieCollectionCarousel(collection: sampleCollection, currentMovieId: 238, selectedMovie: .constant(nil))
+        .environmentObject(previewStore)
         .background(AppGradient.background)
 }

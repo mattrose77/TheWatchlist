@@ -181,7 +181,6 @@ struct BrowseMovieDetailView: View {
                     // Where to Watch Section
                     if !isLoadingWatchProviders {
                         WatchProvidersView(providers: watchProviders)
-                            .padding(.horizontal)
                     }
                     
                     // Action Buttons
@@ -289,9 +288,10 @@ struct BrowseMovieDetailView: View {
         defer { isLoadingTrailer = false }
         
         do {
+            let contentType: ContentType = movie.isTV ? .tv : .movies
             trailer = try await store.movieService.fetchTrailer(
                 for: movie.id,
-                contentType: store.selectedContentType
+                contentType: contentType
             )
         } catch {
             print("Error loading trailer: \(error)")
@@ -341,9 +341,10 @@ struct BrowseMovieDetailView: View {
         defer { isLoadingWatchProviders = false }
         
         do {
+            let contentType: ContentType = movie.isTV ? .tv : .movies
             if let providerData = try await store.movieService.fetchWatchProviders(
                 for: movie.id,
-                contentType: store.selectedContentType
+                contentType: contentType
             ) {
                 watchProviders = providerData.streamingProviders
             }

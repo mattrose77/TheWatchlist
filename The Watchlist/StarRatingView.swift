@@ -102,9 +102,19 @@ struct RatingSheet: View {
     
     var body: some View {
         ZStack {
-            // Background
-            AppGradient.background
-                .ignoresSafeArea()
+            // Background - explicitly set
+            LinearGradient(
+                colors: [
+                    Color(hex: "8FA89E"),
+                    Color(hex: "8FA89E"),
+                    Color(hex: "5C6B6B"),
+                    Color(hex: "1a1a1a"),
+                    Color(hex: "#0d0d0d")
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .ignoresSafeArea()
             
             VStack(spacing: 16) {
                 Spacer()

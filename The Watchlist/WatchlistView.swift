@@ -19,10 +19,25 @@ struct WatchlistView: View {
     ]
     
     var filteredWatchlist: [Movie] {
+        // Get queue IDs for the selected content type
+        let queueIDs = Set(store.getUpNextQueue(for: selectedContentType))
+        
         if selectedContentType == .movies {
-            return store.watchlist.filter { $0.isMovie }
+            return store.watchlist.filter { $0.isMovie && !queueIDs.contains($0.id) }
         } else {
-            return store.watchlist.filter { $0.isTV }
+            return store.watchlist.filter { $0.isTV && !queueIDs.contains($0.id) }
+        }
+    }
+    
+    var hasQueueItems: Bool {
+        !store.getUpNextQueue(for: selectedContentType).isEmpty
+    }
+    
+    var hasWatchlistItems: Bool {
+        if selectedContentType == .movies {
+            return store.watchlist.contains { $0.isMovie }
+        } else {
+            return store.watchlist.contains { $0.isTV }
         }
     }
     
@@ -45,28 +60,51 @@ struct WatchlistView: View {
                     .padding(.bottom, 12)
                     
                     ScrollView {
-                        if filteredWatchlist.isEmpty {
-                            ContentUnavailableView {
-                                Label(selectedContentType == .movies ? "No Movies Yet" : "No TV Shows Yet", 
-                                      systemImage: "popcorn")
-                                    .foregroundStyle(AppTextColors.primary)
-                            } description: {
-                                Text("Browse \(selectedContentType.rawValue.lowercased()) and add them to your watchlist")
-                                    .foregroundStyle(AppTextColors.secondary)
+                        VStack(spacing: 0) {
+                            // Up Next Queue Card - only show if watchlist has items
+                            if hasWatchlistItems {
+                                UpNextQueueCard(contentType: selectedContentType)
+                                    .environmentObject(store)
                             }
-                            .padding(.top, 100)
-                        } else {
-                            LazyVGrid(columns: columns, spacing: 12) {
-                                ForEach(filteredWatchlist) { movie in
-                                    Button {
-                                        selectedMovie = movie
-                                    } label: {
-                                        MoviePosterView(movie: movie, width: 110)
+                            
+                            // Watchlist Grid
+                            if filteredWatchlist.isEmpty {
+                                if hasQueueItems {
+                                    // All items are in the queue
+                                    ContentUnavailableView {
+                                        Label("All in Queue", 
+                                              systemImage: "list.bullet")
+                                            .foregroundStyle(AppTextColors.primary)
+                                    } description: {
+                                        Text("All your \(selectedContentType.rawValue.lowercased()) are in the Up Next queue")
+                                            .foregroundStyle(AppTextColors.secondary)
                                     }
-                                    .buttonStyle(.plain)
+                                    .padding(.top, 100)
+                                } else {
+                                    // No items at all
+                                    ContentUnavailableView {
+                                        Label(selectedContentType == .movies ? "No Movies Yet" : "No TV Shows Yet", 
+                                              systemImage: "popcorn")
+                                            .foregroundStyle(AppTextColors.primary)
+                                    } description: {
+                                        Text("Browse \(selectedContentType.rawValue.lowercased()) and add them to your watchlist")
+                                            .foregroundStyle(AppTextColors.secondary)
+                                    }
+                                    .padding(.top, 100)
                                 }
+                            } else {
+                                LazyVGrid(columns: columns, spacing: 12) {
+                                    ForEach(filteredWatchlist) { movie in
+                                        Button {
+                                            selectedMovie = movie
+                                        } label: {
+                                            MoviePosterView(movie: movie, width: 110)
+                                        }
+                                        .buttonStyle(.plain)
+                                    }
+                                }
+                                .padding()
                             }
-                            .padding()
                         }
                     }
                 }

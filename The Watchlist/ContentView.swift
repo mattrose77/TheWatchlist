@@ -31,12 +31,24 @@ struct ContentView: View {
                     
                     ArchiveView()
                         .tabItem {
-                            Label("Archive", systemImage: "checkmark.circle.fill")
+                            Label("Watched", systemImage: "checkmark.circle.fill")
                         }
                 }
                 .environmentObject(store)
             } else {
                 WelcomeView(hasSeenWelcome: $hasSeenWelcome)
+            }
+            
+            // Milestone overlay
+            if let milestone = store.currentMilestone {
+                MilestoneView(milestone: milestone) {
+                    withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
+                        store.dismissMilestone()
+                    }
+                }
+                .transition(.scale.combined(with: .opacity))
+                .animation(.spring(response: 0.5, dampingFraction: 0.7), value: store.currentMilestone != nil)
+                .zIndex(100)
             }
         }
     }

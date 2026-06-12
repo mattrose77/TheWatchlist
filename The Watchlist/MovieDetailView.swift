@@ -22,6 +22,12 @@ struct MovieDetailView: View {
     @State private var isLoadingCollection = false
     @State private var selectedCollectionMovie: Movie?
     @State private var isDescriptionExpanded = false
+    @State private var fullMovieDetails: Movie?
+    
+    // Use full details if available, otherwise fall back to the passed movie
+    private var displayMovie: Movie {
+        fullMovieDetails ?? movie
+    }
     
     var body: some View {
         NavigationStack {
@@ -33,23 +39,23 @@ struct MovieDetailView: View {
                 ScrollView {
                 VStack(spacing: 24) {
                     // Poster
-                    MovieDetailPosterView(movie: movie, height: 500)
+                    MovieDetailPosterView(movie: displayMovie, height: 500)
                         .frame(maxWidth: 300)
                     
                     // Movie Info
                     VStack(spacing: 16) {
-                        Text(movie.title)
+                        Text(displayMovie.title)
                             .font(.title)
                             .bold()
                             .foregroundStyle(AppTextColors.primary)
                             .multilineTextAlignment(.center)
                         
                         HStack(spacing: 20) {
-                            if movie.voteAverage > 0.0 {
+                            if displayMovie.voteAverage > 0.0 {
                                 HStack {
                                     Image(systemName: "star.fill")
                                         .foregroundStyle(AppTextColors.rating)
-                                    Text(String(format: "%.1f", movie.voteAverage))
+                                    Text(String(format: "%.1f", displayMovie.voteAverage))
                                         .bold()
                                         .foregroundStyle(AppTextColors.primary)
                                 }
@@ -62,11 +68,11 @@ struct MovieDetailView: View {
                             Text("•")
                                 .foregroundStyle(AppTextColors.tertiary)
                             
-                            Text(movie.year)
+                            Text(displayMovie.year)
                                 .foregroundStyle(AppTextColors.secondary)
                             
                             // Show number of seasons for TV shows
-                            if movie.isTV, let seasons = movie.numberOfSeasons {
+                            if displayMovie.isTV, let seasons = displayMovie.numberOfSeasons {
                                 Text("•")
                                     .foregroundStyle(AppTextColors.tertiary)
                                 
@@ -103,7 +109,7 @@ struct MovieDetailView: View {
                             )
                         }
                         
-                        Text(movie.overview)
+                        Text(displayMovie.overview)
                             .font(.body)
                             .foregroundStyle(AppTextColors.secondary)
                             .multilineTextAlignment(.leading)
@@ -150,11 +156,11 @@ struct MovieDetailView: View {
                     // Where to Watch Section
                     if !isLoadingWatchProviders {
                         WatchProvidersView(providers: watchProviders)
-                            .padding(.horizontal)
                     }
                     
                     // Action Buttons
                     if isInWatchlist {
+                        // Movie is in watchlist - show watchlist actions
                         VStack(spacing: 12) {
                             Button {
                                 showRatingSheet = true
@@ -176,20 +182,31 @@ struct MovieDetailView: View {
                                     .font(.headline)
                                     .frame(maxWidth: .infinity)
                                     .padding()
-                                    .background(Color(.systemGray5))
-                                    .foregroundStyle(.red)
+                                    .background(Color.white.opacity(0.1))
+                                    .foregroundStyle(.red.opacity(0.9))
                                     .clipShape(RoundedRectangle(cornerRadius: 16))
                             }
                         }
                         .padding(.horizontal)
-                    } else {
+                    } else if store.archive.contains(where: { $0.id == movie.id }) {
+                        // Movie is in archive - show archive actions
                         VStack(spacing: 12) {
-                            // Edit Rating Button
-                            if store.getRating(for: movie.id) != nil {
-                                Button {
-                                    showRatingSheet = true
-                                } label: {
+                            // Add or Edit Rating Button
+                            Button {
+                                showRatingSheet = true
+                            } label: {
+                                if store.getRating(for: movie.id) != nil {
                                     Label("Edit Rating", systemImage: "star.fill")
+                                        .font(.headline)
+                                        .frame(maxWidth: .infinity)
+                                        .padding()
+                                        .background(
+                                            RoundedRectangle(cornerRadius: 16)
+                                                .fill(AppGradient.gold.opacity(0.6))
+                                        )
+                                        .foregroundStyle(AppTextColors.primary)
+                                } else {
+                                    Label("Add Rating", systemImage: "star")
                                         .font(.headline)
                                         .frame(maxWidth: .infinity)
                                         .padding()
@@ -217,6 +234,35 @@ struct MovieDetailView: View {
                             }
                         }
                         .padding(.horizontal)
+                    } else {
+                        // Movie is neither in watchlist nor archive - show both options
+                        VStack(spacing: 12) {
+                            Button {
+                                store.addToWatchlist(movie)
+                                dismiss()
+                            } label: {
+                                Label("Add to Watchlist", systemImage: "plus.circle.fill")
+                                    .font(.headline)
+                                    .frame(maxWidth: .infinity)
+                                    .padding()
+                                    .background(AppGradient.blue)
+                                    .foregroundStyle(.white)
+                                    .clipShape(RoundedRectangle(cornerRadius: 16))
+                            }
+                            
+                            Button {
+                                showRatingSheet = true
+                            } label: {
+                                Label("Mark as Watched", systemImage: "checkmark.circle.fill")
+                                    .font(.headline)
+                                    .frame(maxWidth: .infinity)
+                                    .padding()
+                                    .background(AppGradient.green)
+                                    .foregroundStyle(.white)
+                                    .clipShape(RoundedRectangle(cornerRadius: 16))
+                            }
+                        }
+                        .padding(.horizontal)
                     }
                 }
                 .padding()
@@ -237,9 +283,16 @@ struct MovieDetailView: View {
                         if rating > 0 {
                             store.setRating(rating, for: movie)
                         }
-                        // Only mark as watched if it's in the watchlist
+                        
+                        let isInArchive = store.archive.contains(where: { $0.id == movie.id })
+                        
                         if isInWatchlist {
+                            // Movie is in watchlist - move it to archive
                             store.markAsWatched(movie)
+                            dismiss()
+                        } else if !isInArchive {
+                            // Movie is not in watchlist and not in archive - add directly to archive
+                            store.addToArchive(movie)
                             dismiss()
                         }
                         // If it's already in archive, just update the rating (no dismiss)
@@ -255,9 +308,13 @@ struct MovieDetailView: View {
             .task {
                 await loadWatchProviders()
                 await loadCollection()
+                await loadTVShowDetails()
             }
             .sheet(item: $selectedCollectionMovie) { collectionMovie in
-                MovieDetailView(movie: collectionMovie, isInWatchlist: store.watchlist.contains(where: { $0.id == collectionMovie.id }))
+                // Check both watchlist and archive to determine the correct state
+                let isInWatchlist = store.watchlist.contains(where: { $0.id == collectionMovie.id })
+                
+                MovieDetailView(movie: collectionMovie, isInWatchlist: isInWatchlist)
                     .environmentObject(store)
             }
         }
@@ -302,6 +359,18 @@ struct MovieDetailView: View {
             }
         } catch {
             print("Error loading watch providers: \(error)")
+        }
+    }
+    
+    private func loadTVShowDetails() async {
+        // Only fetch details for TV shows that don't already have season info
+        guard movie.isTV, movie.numberOfSeasons == nil else { return }
+        
+        do {
+            let tvShowDetails = try await store.movieService.fetchTVShowDetails(tvShowId: movie.id)
+            fullMovieDetails = tvShowDetails
+        } catch {
+            print("Error loading TV show details: \(error)")
         }
     }
 }

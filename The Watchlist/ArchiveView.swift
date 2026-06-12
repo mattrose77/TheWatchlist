@@ -19,10 +19,19 @@ struct ArchiveView: View {
     ]
     
     var filteredArchive: [Movie] {
+        let filtered: [Movie]
         if selectedContentType == .movies {
-            return store.archive.filter { $0.isMovie }
+            filtered = store.archive.filter { $0.isMovie }
         } else {
-            return store.archive.filter { $0.isTV }
+            filtered = store.archive.filter { $0.isTV }
+        }
+        
+        // Sort by rating in descending order (highest first)
+        // Items without ratings will appear at the end
+        return filtered.sorted { movie1, movie2 in
+            let rating1 = store.getRating(for: movie1.id) ?? 0
+            let rating2 = store.getRating(for: movie2.id) ?? 0
+            return rating1 > rating2
         }
     }
     
@@ -90,6 +99,13 @@ struct ArchiveView: View {
                     .padding(.horizontal)
                     .padding(.bottom, 12)
                     
+                    // Top Four Showcase - only show if there are watched items
+                    if !filteredArchive.isEmpty {
+                        TopFourShowcaseView(contentType: selectedContentType)
+                            .environmentObject(store)
+                            .id(selectedContentType) // Force recreation when switching tabs
+                    }
+                    
                     ScrollView {
                         if filteredArchive.isEmpty {
                             ContentUnavailableView {
@@ -102,58 +118,66 @@ struct ArchiveView: View {
                             }
                             .padding(.top, 100)
                         } else {
-                            LazyVGrid(columns: columns, spacing: 12) {
-                                ForEach(filteredArchive) { movie in
-                                    Button {
-                                        selectedMovie = movie
-                                    } label: {
-                                        ZStack(alignment: .topTrailing) {
-                                            MoviePosterView(movie: movie, width: 110)
-                                            
-                                            // Always show rating badge with star
-                                            if let rating = store.getRating(for: movie.id) {
-                                                // User has rated this item - show the rating
-                                                HStack(spacing: 2) {
-                                                    Image(systemName: "star.fill")
-                                                        .font(.system(size: 9))
-                                                        .foregroundStyle(.yellow.opacity(0.8))
-                                                    Text(String(format: "%.1f", rating))
-                                                        .font(.system(size: 11, weight: .bold))
-                                                        .foregroundStyle(.white)
-                                                }
-                                                .padding(.horizontal, 6)
-                                                .padding(.vertical, 4)
-                                                .background(
-                                                    Capsule()
-                                                        .fill(Color.black.opacity(0.7))
-                                                )
-                                                .shadow(color: .black.opacity(0.3), radius: 4, x: 0, y: 2)
-                                                .offset(x: 6, y: -6)
-                                            } else {
-                                                // No rating yet - show empty star to indicate they can rate
-                                                Circle()
-                                                    .fill(Color.black.opacity(0.7))
-                                                    .frame(width: 28, height: 28)
-                                                    .overlay {
-                                                        Image(systemName: "star")
-                                                            .font(.system(size: 12))
+                            VStack(alignment: .leading, spacing: -5) {
+                                // Section label
+                                Text("All watched")
+                                    .font(.system(size: 12, weight: .semibold))
+                                    .foregroundStyle(AppTextColors.primary)
+                                    .padding(.horizontal)
+                                
+                                LazyVGrid(columns: columns, spacing: 12) {
+                                    ForEach(filteredArchive) { movie in
+                                        Button {
+                                            selectedMovie = movie
+                                        } label: {
+                                            ZStack(alignment: .topTrailing) {
+                                                MoviePosterView(movie: movie, width: 110)
+                                                
+                                                // Always show rating badge with star
+                                                if let rating = store.getRating(for: movie.id) {
+                                                    // User has rated this item - show the rating
+                                                    HStack(spacing: 2) {
+                                                        Image(systemName: "star.fill")
+                                                            .font(.system(size: 9))
                                                             .foregroundStyle(.yellow.opacity(0.8))
+                                                        Text(String(format: "%.1f", rating))
+                                                            .font(.system(size: 11, weight: .bold))
+                                                            .foregroundStyle(.white)
                                                     }
+                                                    .padding(.horizontal, 6)
+                                                    .padding(.vertical, 4)
+                                                    .background(
+                                                        Capsule()
+                                                            .fill(Color.black.opacity(0.7))
+                                                    )
                                                     .shadow(color: .black.opacity(0.3), radius: 4, x: 0, y: 2)
                                                     .offset(x: 6, y: -6)
+                                                } else {
+                                                    // No rating yet - show empty star to indicate they can rate
+                                                    Circle()
+                                                        .fill(Color.black.opacity(0.7))
+                                                        .frame(width: 28, height: 28)
+                                                        .overlay {
+                                                            Image(systemName: "star")
+                                                                .font(.system(size: 12))
+                                                                .foregroundStyle(.yellow.opacity(0.8))
+                                                        }
+                                                        .shadow(color: .black.opacity(0.3), radius: 4, x: 0, y: 2)
+                                                        .offset(x: 6, y: -6)
+                                                }
                                             }
                                         }
+                                        .buttonStyle(.plain)
+                                        .id("\(movie.id)-\(store.getRating(for: movie.id) ?? 0)") // Force refresh when rating changes
                                     }
-                                    .buttonStyle(.plain)
-                                    .id("\(movie.id)-\(store.getRating(for: movie.id) ?? 0)") // Force refresh when rating changes
                                 }
+                                .padding()
                             }
-                            .padding()
                         }
                     }
                 }
             }
-            .navigationTitle("Archive")
+            .navigationTitle("Watched")
             .navigationBarTitleDisplayMode(.inline)
             .sheet(item: $selectedMovie) { movie in
                 MovieDetailView(movie: movie, isInWatchlist: false)
@@ -168,18 +192,18 @@ struct StatBoxView: View {
     let label: String
     
     var body: some View {
-        VStack(spacing: 6) {
+        VStack(spacing: 4) {
             Text(value)
-                .font(.largeTitle)
+                .font(.title2)
                 .fontWeight(.bold)
                 .foregroundStyle(AppTextColors.primary)
             
             Text(label)
-                .font(.subheadline)
+                .font(.caption)
                 .foregroundStyle(AppTextColors.secondary)
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 12)
+        .padding(.vertical, 8)
         .background(
             RoundedRectangle(cornerRadius: 12)
                 .fill(Color.white.opacity(0.1))
