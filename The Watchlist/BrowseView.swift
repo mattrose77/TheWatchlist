@@ -26,35 +26,34 @@ struct BrowseView: View {
                     .ignoresSafeArea()
                 
                 VStack(spacing: 0) {
-                // Content Type Picker (Movies / TV Shows) with Search Button
-                HStack(spacing: 12) {
-                    Picker("Content Type", selection: $store.selectedContentType) {
-                        ForEach(ContentType.allCases, id: \.self) { type in
-                            Text(type.rawValue).tag(type)
+                    // Content Type Picker (Movies / TV Shows) with Search Button
+                    HStack(spacing: 12) {
+                        Picker("Content Type", selection: $store.selectedContentType) {
+                            ForEach(ContentType.allCases, id: \.self) { type in
+                                Text(type.rawValue).tag(type)
+                            }
+                        }
+                        .pickerStyle(.segmented)
+                        
+                        Button {
+                            showingSearch = true
+                        } label: {
+                            Image(systemName: "magnifyingglass")
+                                .font(.callout)
+                                .foregroundStyle(AppTextColors.primary)
+                                .frame(width: 30, height: 44)
+                                .background(Color.white.opacity(0.2))
+                                .clipShape(Circle())
                         }
                     }
-                    .pickerStyle(.segmented)
-                    
-                    Button {
-                        showingSearch = true
-                    } label: {
-                        Image(systemName: "magnifyingglass")
-                            .font(.title3)
-                            .foregroundStyle(AppTextColors.primary)
-                            .frame(width: 44, height: 44)
-                            .background(Color.white.opacity(0.2))
-                            .clipShape(Circle())
+                    .padding(.horizontal)
+                    .padding(.top, -12)
+                    .onChange(of: store.selectedContentType) { oldValue, newValue in
+                        Task {
+                            // Always reset to Trending when switching content type
+                            await store.loadMovies(for: .trending, contentType: newValue)
+                        }
                     }
-                }
-                .padding(.horizontal)
-                .padding(.top, 35)
-                .padding(.bottom, 4)
-                .onChange(of: store.selectedContentType) { oldValue, newValue in
-                    Task {
-                        // Always reset to Trending when switching content type
-                        await store.loadMovies(for: .trending, contentType: newValue)
-                    }
-                }
                 
                 // Horizontal Category Selector
                 ScrollView(.horizontal, showsIndicators: false) {
@@ -108,6 +107,8 @@ struct BrowseView: View {
                 }
             }
             }
+            .navigationTitle("Browse")
+            .navigationBarTitleDisplayMode(.inline)
             .task {
                 if store.availableMovies.isEmpty {
                     await store.loadMovies()

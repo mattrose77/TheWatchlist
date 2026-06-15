@@ -266,14 +266,14 @@ struct UpNextSlotView: View {
                     // Position badge (top-left)
                     ZStack {
                         Circle()
-                            .fill(Color(hex: "1A6B5A").opacity(0.85))
-                            .frame(width: 22, height: 22)
+                            .fill(AppGradient.green)
+                            .frame(width: 18, height: 18)
                         
                         Text("\(slotNumber)")
-                            .font(.system(size: 12, weight: .bold))
+                            .font(.system(size: 10, weight: .bold))
                             .foregroundStyle(.white)
                     }
-                    .offset(x: -6, y: -6)
+                    .offset(x: -5, y: -5)
                     
                     // Remove badge (top-right) - only visible in edit mode
                     if isEditMode {
