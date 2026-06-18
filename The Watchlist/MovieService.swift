@@ -95,10 +95,39 @@ struct MovieDetails: Codable {
     let title: String?
     let name: String?
     let belongsToCollection: MovieCollection?
+    let runtime: Int?
+    let credits: Credits?
     
     enum CodingKeys: String, CodingKey {
-        case id, title, name
+        case id, title, name, runtime, credits
         case belongsToCollection = "belongs_to_collection"
+    }
+    
+    var director: String? {
+        // First try to find director specifically in the Directing department
+        if let director = credits?.crew.first(where: { 
+            $0.job.lowercased() == "director" && $0.department?.lowercased() == "directing"
+        }) {
+            return director.name
+        }
+        
+        // Fallback: just find anyone with Director job title
+        return credits?.crew.first(where: { $0.job.lowercased() == "director" })?.name
+    }
+}
+
+struct Credits: Codable {
+    let crew: [CrewMember]
+}
+
+struct CrewMember: Codable {
+    let name: String
+    let job: String
+    let department: String?
+    let order: Int?
+    
+    enum CodingKeys: String, CodingKey {
+        case name, job, department, order
     }
 }
 
@@ -350,7 +379,7 @@ class MovieService: ObservableObject {
     
     // Fetch movie details to check if it belongs to a collection
     func fetchMovieDetails(movieId: Int) async throws -> MovieDetails {
-        let urlString = "\(baseURL)/movie/\(movieId)?api_key=\(apiKey)&language=en-US"
+        let urlString = "\(baseURL)/movie/\(movieId)?api_key=\(apiKey)&language=en-US&append_to_response=credits"
         
         guard let url = URL(string: urlString) else {
             throw URLError(.badURL)

@@ -12,31 +12,40 @@ struct Movie: Identifiable, Codable, Hashable {
     let title: String
     let overview: String
     let posterPath: String?
+    let backdropPath: String?
     let releaseDate: String?
     let voteAverage: Double
     var mediaType: String? // "movie" or "tv"
     var numberOfSeasons: Int? // For TV shows only
+    var runtime: Int? // Runtime in minutes (for movies only)
+    var director: String? // Director name (for movies only)
     
     enum CodingKeys: String, CodingKey {
         case id, title, name, overview
         case posterPath = "poster_path"
+        case backdropPath = "backdrop_path"
         case releaseDate = "release_date"
         case firstAirDate = "first_air_date"
         case voteAverage = "vote_average"
         case mediaType = "media_type"
         case numberOfSeasons = "number_of_seasons"
+        case runtime
+        case director
     }
     
     // Memberwise initializer for testing and previews
-    init(id: Int, title: String, overview: String, posterPath: String?, releaseDate: String?, voteAverage: Double, mediaType: String? = nil, numberOfSeasons: Int? = nil) {
+    init(id: Int, title: String, overview: String, posterPath: String?, backdropPath: String? = nil, releaseDate: String?, voteAverage: Double, mediaType: String? = nil, numberOfSeasons: Int? = nil, runtime: Int? = nil, director: String? = nil) {
         self.id = id
         self.title = title
         self.overview = overview
         self.posterPath = posterPath
+        self.backdropPath = backdropPath
         self.releaseDate = releaseDate
         self.voteAverage = voteAverage
         self.mediaType = mediaType
         self.numberOfSeasons = numberOfSeasons
+        self.runtime = runtime
+        self.director = director
     }
     
     init(from decoder: Decoder) throws {
@@ -55,6 +64,7 @@ struct Movie: Identifiable, Codable, Hashable {
         
         overview = try container.decode(String.self, forKey: .overview)
         posterPath = try? container.decode(String.self, forKey: .posterPath)
+        backdropPath = try? container.decode(String.self, forKey: .backdropPath)
         
         // TV shows use "first_air_date" instead of "release_date"
         if let releaseDateValue = try? container.decode(String.self, forKey: .releaseDate) {
@@ -68,6 +78,8 @@ struct Movie: Identifiable, Codable, Hashable {
         voteAverage = try container.decode(Double.self, forKey: .voteAverage)
         mediaType = try? container.decode(String.self, forKey: .mediaType)
         numberOfSeasons = try? container.decode(Int.self, forKey: .numberOfSeasons)
+        runtime = try? container.decode(Int.self, forKey: .runtime)
+        director = try? container.decode(String.self, forKey: .director)
     }
     
     // Encoder for when we need to save data
@@ -77,15 +89,23 @@ struct Movie: Identifiable, Codable, Hashable {
         try container.encode(title, forKey: .title)
         try container.encode(overview, forKey: .overview)
         try container.encodeIfPresent(posterPath, forKey: .posterPath)
+        try container.encodeIfPresent(backdropPath, forKey: .backdropPath)
         try container.encodeIfPresent(releaseDate, forKey: .releaseDate)
         try container.encode(voteAverage, forKey: .voteAverage)
         try container.encodeIfPresent(mediaType, forKey: .mediaType)
         try container.encodeIfPresent(numberOfSeasons, forKey: .numberOfSeasons)
+        try container.encodeIfPresent(runtime, forKey: .runtime)
+        try container.encodeIfPresent(director, forKey: .director)
     }
     
     var posterURL: URL? {
         guard let posterPath = posterPath else { return nil }
         return URL(string: "https://image.tmdb.org/t/p/w500\(posterPath)")
+    }
+    
+    var backdropURL: URL? {
+        guard let backdropPath = backdropPath else { return nil }
+        return URL(string: "https://image.tmdb.org/t/p/w1280\(backdropPath)")
     }
     
     var year: String {
@@ -99,6 +119,20 @@ struct Movie: Identifiable, Codable, Hashable {
     
     var isMovie: Bool {
         return mediaType == "movie" || mediaType == nil // Default to movie if not specified
+    }
+    
+    var formattedRuntime: String? {
+        guard let runtime = runtime, runtime > 0 else { return nil }
+        let hours = runtime / 60
+        let minutes = runtime % 60
+        
+        if hours > 0 && minutes > 0 {
+            return "\(hours)h \(minutes)m"
+        } else if hours > 0 {
+            return "\(hours)h"
+        } else {
+            return "\(minutes)m"
+        }
     }
 }
 

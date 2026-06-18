@@ -38,16 +38,94 @@ struct BrowseMovieDetailView: View {
     
     var body: some View {
         NavigationStack {
-            ZStack {
-                // Background gradient
-                AppGradient.background
-                    .ignoresSafeArea()
+            // Check if we have a backdrop
+            if displayMovie.backdropURL != nil {
+                // New layout with backdrop
+                backdropHeaderView
+            } else {
+                // Original layout without backdrop
+                ZStack {
+                    // Background gradient
+                    AppGradient.background
+                        .ignoresSafeArea()
+                    
+                    ScrollView {
+                        originalLayoutView
+                    }
+                }
+            }
+        }
+        .toolbar {
+            ToolbarItem(placement: .cancellationAction) {
+                Button("Close") {
+                    dismiss()
+                }
+            }
+        }
+        .sheet(isPresented: $showRatingSheet) {
+            RatingSheet(
+                rating: $currentRating,
+                movie: movie,
+                onSubmit: { rating in
+                    if rating > 0 {
+                        store.setRating(rating, for: movie)
+                    }
+                    store.markAsWatched(movie)
+                    dismiss()
+                }
+            )
+            .presentationDetents([.medium])
+            .presentationDragIndicator(.visible)
+        }
+        .task {
+            await loadTrailer()
+            await loadTVShowDetails()
+            await loadCollection()
+            await loadWatchProviders()
+        }
+        .onAppear {
+            currentRating = store.getRating(for: movie.id) ?? 0.0
+        }
+        .sheet(item: $selectedCollectionMovie) { collectionMovie in
+            BrowseMovieDetailView(movie: collectionMovie)
+                .environmentObject(store)
+        }
+    }
+    
+    // MARK: - Backdrop Header View (New Layout)
+    private var backdropHeaderView: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 0) {
+                // Backdrop image with gradient overlay
+                AsyncImage(url: displayMovie.backdropURL) { image in
+                    image
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                        .frame(height: 300)
+                        .clipped()
+                        .mask(
+                            LinearGradient(
+                                gradient: Gradient(stops: [
+                                    .init(color: .black, location: 0.0),
+                                    .init(color: .black, location: 0.5),
+                                    .init(color: .clear, location: 1.0)
+                                ]),
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
+                        )
+                } placeholder: {
+                    Rectangle()
+                        .fill(Color.gray.opacity(0.3))
+                        .frame(height: 300)
+                }
+                .frame(maxWidth: .infinity)
                 
-                ScrollView {
-                VStack(spacing: 24) {
-                    // Poster with Play Button Overlay
+                // Poster with Play Button Overlay and Title Section
+                HStack(alignment: .top, spacing: 12) {
+                    // Poster - overlapping the backdrop
                     ZStack(alignment: .center) {
-                        MovieDetailPosterView(movie: movie, height: 500)
+                        MovieDetailPosterView(movie: displayMovie, height: 160)
                         
                         // Play Button Overlay
                         if let trailer = trailer {
@@ -59,12 +137,12 @@ struct BrowseMovieDetailView: View {
                                 ZStack {
                                     Circle()
                                         .fill(.black.opacity(0.7))
-                                        .frame(width: 80, height: 80)
+                                        .frame(width: 50, height: 50)
                                     
                                     Image(systemName: "play.fill")
-                                        .font(.system(size: 30))
+                                        .font(.system(size: 20))
                                         .foregroundStyle(.white)
-                                        .offset(x: 3)
+                                        .offset(x: 2)
                                 }
                             }
                             .shadow(color: .black.opacity(0.3), radius: 10)
@@ -72,94 +150,137 @@ struct BrowseMovieDetailView: View {
                             ZStack {
                                 Circle()
                                     .fill(.black.opacity(0.7))
-                                    .frame(width: 80, height: 80)
+                                    .frame(width: 50, height: 50)
                                 
                                 ProgressView()
                                     .tint(.white)
+                                    .scaleEffect(0.8)
                             }
                         }
                     }
-                    .frame(maxWidth: 300)
+                    .frame(width: 107)
+                    .shadow(color: .black.opacity(0.5), radius: 10)
+                    .padding(.leading, 60)
+                    .offset(y: -30) // Overlap the backdrop
                     
-                    // Movie Info
-                    VStack(spacing: 16) {
-                        Text(movie.title)
-                            .font(.title)
+                    // Title and Metadata - on the gradient background
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(displayMovie.title)
+                            .font(.title3)
                             .bold()
                             .foregroundStyle(AppTextColors.primary)
-                            .multilineTextAlignment(.center)
+                            .multilineTextAlignment(.leading)
+                            .lineLimit(3)
                         
-                        HStack(spacing: 20) {
-                            if movie.voteAverage > 0.0 {
-                                HStack {
-                                    Image(systemName: "star.fill")
-                                        .foregroundStyle(AppTextColors.rating)
-                                    Text(String(format: "%.1f", movie.voteAverage))
-                                        .bold()
-                                        .foregroundStyle(AppTextColors.primary)
+                        // Metadata
+                        VStack(alignment: .leading, spacing: 6) {
+                            HStack(spacing: 6) {
+                                if displayMovie.voteAverage > 0.0 {
+                                    HStack(spacing: 3) {
+                                        Image(systemName: "star.fill")
+                                            .foregroundStyle(AppTextColors.rating)
+                                            .font(.caption)
+                                        Text(String(format: "%.1f", displayMovie.voteAverage))
+                                            .bold()
+                                            .foregroundStyle(AppTextColors.primary)
+                                    }
                                 }
-                            } else {
-                                Text("Not Released")
-                                    .font(.subheadline)
+                            }
+                            .font(.subheadline)
+                            
+                            // Release date
+                            HStack(spacing: 3) {
+                                Image(systemName: "calendar")
+                                    .foregroundStyle(AppTextColors.accent)
+                                    .font(.caption)
+                                Text(displayMovie.year)
                                     .foregroundStyle(AppTextColors.secondary)
                             }
+                            .font(.subheadline)
                             
-                            Text("•")
-                                .foregroundStyle(AppTextColors.tertiary)
+                            // Runtime for movies / Seasons for TV
+                            if displayMovie.isMovie, let formattedRuntime = displayMovie.formattedRuntime {
+                                HStack(spacing: 3) {
+                                    Image(systemName: "clock")
+                                        .foregroundStyle(AppTextColors.accent)
+                                        .font(.caption)
+                                    Text(formattedRuntime)
+                                        .foregroundStyle(AppTextColors.secondary)
+                                }
+                                .font(.subheadline)
+                            }
                             
-                            Text(movie.year)
-                                .foregroundStyle(AppTextColors.secondary)
-                            
-                            // Show number of seasons for TV shows
                             if displayMovie.isTV, let seasons = displayMovie.numberOfSeasons {
-                                Text("•")
-                                    .foregroundStyle(AppTextColors.tertiary)
-                                
-                                HStack(spacing: 4) {
+                                HStack(spacing: 3) {
                                     Image(systemName: "tv")
                                         .foregroundStyle(AppTextColors.accent)
+                                        .font(.caption)
                                     Text("\(seasons) \(seasons == 1 ? "Season" : "Seasons")")
                                         .foregroundStyle(AppTextColors.secondary)
                                 }
+                                .font(.subheadline)
                             }
-                        }
-                        .font(.title3)
-                        
-                        // User Rating Display
-                        if let userRating = store.getRating(for: movie.id) {
-                            VStack(spacing: 8) {
-                                Text("Your Rating")
-                                    .font(.caption)
-                                    .foregroundStyle(AppTextColors.secondary)
-                                
-                                HStack(spacing: 4) {
-                                    StarRatingView(rating: .constant(userRating), starSize: 20, interactive: false)
-                                    Text(String(format: "%.1f", userRating))
-                                        .font(.subheadline)
-                                        .bold()
+                            
+                            // Director
+                            if let director = displayMovie.director {
+                                HStack(spacing: 3) {
+                                    Image(systemName: "video")
                                         .foregroundStyle(AppTextColors.accent)
+                                        .font(.caption)
+                                    Text(director)
+                                        .foregroundStyle(AppTextColors.secondary)
                                 }
+                                .font(.subheadline)
                             }
-                            .padding(.vertical, 8)
-                            .padding(.horizontal, 16)
-                            .background(
-                                RoundedRectangle(cornerRadius: 12)
-                                    .fill(Color.white.opacity(0.1))
-                            )
                         }
-                        
-                        Text(movie.overview)
-                            .font(.body)
-                            .foregroundStyle(AppTextColors.secondary)
-                            .multilineTextAlignment(.leading)
-                            .padding(.horizontal)
                     }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .padding(.horizontal, 20)
+                
+                Spacer()
+                    .frame(height: 5)
+                
+                // Rest of the content
+                VStack(spacing: 20) {
+                    // User Rating Display
+                    if let userRating = store.getRating(for: movie.id) {
+                        VStack(spacing: 8) {
+                            Text("Your Rating")
+                                .font(.caption)
+                                .foregroundStyle(AppTextColors.secondary)
+                            
+                            HStack(spacing: 4) {
+                                StarRatingView(rating: .constant(userRating), starSize: 20, interactive: false)
+                                Text(String(format: "%.1f", userRating))
+                                    .font(.subheadline)
+                                    .bold()
+                                    .foregroundStyle(AppTextColors.accent)
+                            }
+                        }
+                        .padding(.vertical, 8)
+                        .padding(.horizontal, 16)
+                        .background(
+                            RoundedRectangle(cornerRadius: 12)
+                                .fill(Color.white.opacity(0.1))
+                        )
+                    }
+                    
+                    // Overview
+                    Text(displayMovie.overview)
+                        .font(.body)
+                        .foregroundStyle(AppTextColors.secondary)
+                        .multilineTextAlignment(.leading)
+                        .padding(.horizontal, 85)
+                    
+                    Spacer()
+                        .frame(height: 10)
                     
                     // Collection Section
                     if let collection = collection {
                         Divider()
                             .background(Color.white.opacity(0.2))
-                            .padding(.horizontal)
+                            .padding(.horizontal, 20)
                         
                         MovieCollectionCarousel(
                             collection: collection,
@@ -181,106 +302,240 @@ struct BrowseMovieDetailView: View {
                     // Where to Watch Section
                     if !isLoadingWatchProviders {
                         WatchProvidersView(providers: watchProviders)
+                            .padding(.horizontal, 70)
                     }
                     
                     // Action Buttons
-                    VStack(spacing: 12) {
-                        if isInWatchlist {
-                            HStack {
-                                Image(systemName: "checkmark.circle.fill")
-                                    .foregroundStyle(.green)
-                                Text("Added to Watchlist")
-                                    .foregroundStyle(.secondary)
-                            }
-                            .font(.headline)
-                            .frame(maxWidth: .infinity)
-                            .padding()
-                            .background(Color(.systemGray6))
-                            .clipShape(RoundedRectangle(cornerRadius: 16))
-                        } else {
-                            Button {
-                                store.addToWatchlist(movie)
-                                dismiss()
-                            } label: {
-                                Label("Add to Watchlist", systemImage: "plus.circle.fill")
-                                    .font(.headline)
-                                    .frame(maxWidth: .infinity)
-                                    .padding()
-                                    .background(AppGradient.blue)
-                                    .foregroundStyle(.white)
-                                    .clipShape(RoundedRectangle(cornerRadius: 16))
-                            }
-                            .disabled(isInArchive)
+                    actionButtons
+                }
+                .padding(.bottom, 40)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .background(AppGradient.background)
+        .ignoresSafeArea(edges: .top)
+    }
+    
+    // MARK: - Original Layout View (No Backdrop)
+    private var originalLayoutView: some View {
+        VStack(spacing: 24) {
+            // Poster with Play Button Overlay
+            ZStack(alignment: .center) {
+                MovieDetailPosterView(movie: displayMovie, height: 500)
+                
+                // Play Button Overlay
+                if let trailer = trailer {
+                    Button {
+                        if let youtubeURL = trailer.youtubeURL {
+                            openURL(youtubeURL)
                         }
-                        
-                        if isInArchive {
-                            HStack {
-                                Image(systemName: "checkmark.circle.fill")
-                                    .foregroundStyle(.green)
-                                Text("Already Watched")
-                                    .foregroundStyle(.secondary)
-                            }
-                            .font(.headline)
-                            .frame(maxWidth: .infinity)
-                            .padding()
-                            .background(Color(.systemGray6))
-                            .clipShape(RoundedRectangle(cornerRadius: 16))
-                        } else {
-                            Button {
-                                showRatingSheet = true
-                            } label: {
-                                Label("Mark as Watched", systemImage: "checkmark.circle.fill")
-                                    .font(.headline)
-                                    .frame(maxWidth: .infinity)
-                                    .padding()
-                                    .background(AppGradient.green)
-                                    .foregroundStyle(.white)
-                                    .clipShape(RoundedRectangle(cornerRadius: 16))
-                            }
-                            .disabled(isInWatchlist)
+                    } label: {
+                        ZStack {
+                            Circle()
+                                .fill(.black.opacity(0.7))
+                                .frame(width: 80, height: 80)
+                            
+                            Image(systemName: "play.fill")
+                                .font(.system(size: 30))
+                                .foregroundStyle(.white)
+                                .offset(x: 3)
                         }
                     }
-                    .padding(.horizontal)
+                    .shadow(color: .black.opacity(0.3), radius: 10)
+                } else if isLoadingTrailer {
+                    ZStack {
+                        Circle()
+                            .fill(.black.opacity(0.7))
+                            .frame(width: 80, height: 80)
+                        
+                        ProgressView()
+                            .tint(.white)
+                    }
                 }
+            }
+            .frame(maxWidth: 300)
+            
+            // Movie Info
+            VStack(spacing: 16) {
+                Text(displayMovie.title)
+                    .font(.title)
+                    .bold()
+                    .foregroundStyle(AppTextColors.primary)
+                    .multilineTextAlignment(.center)
+                
+                HStack(spacing: 20) {
+                    if displayMovie.voteAverage > 0.0 {
+                        HStack {
+                            Image(systemName: "star.fill")
+                                .foregroundStyle(AppTextColors.rating)
+                            Text(String(format: "%.1f", displayMovie.voteAverage))
+                                .bold()
+                                .foregroundStyle(AppTextColors.primary)
+                        }
+                    } else {
+                        Text("Not Released")
+                            .font(.subheadline)
+                            .foregroundStyle(AppTextColors.secondary)
+                    }
+                    
+                    Text("•")
+                        .foregroundStyle(AppTextColors.tertiary)
+                    
+                    Text(displayMovie.year)
+                        .foregroundStyle(AppTextColors.secondary)
+                    
+                    // Show runtime for movies
+                    if displayMovie.isMovie, let formattedRuntime = displayMovie.formattedRuntime {
+                        Text("•")
+                            .foregroundStyle(AppTextColors.tertiary)
+                        
+                        HStack(spacing: 4) {
+                            Image(systemName: "clock")
+                                .foregroundStyle(AppTextColors.accent)
+                            Text(formattedRuntime)
+                                .foregroundStyle(AppTextColors.secondary)
+                        }
+                    }
+                    
+                    // Show number of seasons for TV shows
+                    if displayMovie.isTV, let seasons = displayMovie.numberOfSeasons {
+                        Text("•")
+                            .foregroundStyle(AppTextColors.tertiary)
+                        
+                        HStack(spacing: 4) {
+                            Image(systemName: "tv")
+                                .foregroundStyle(AppTextColors.accent)
+                            Text("\(seasons) \(seasons == 1 ? "Season" : "Seasons")")
+                                .foregroundStyle(AppTextColors.secondary)
+                        }
+                    }
+                }
+                .font(.title3)
+                
+                // User Rating Display
+                if let userRating = store.getRating(for: movie.id) {
+                    VStack(spacing: 8) {
+                        Text("Your Rating")
+                            .font(.caption)
+                            .foregroundStyle(AppTextColors.secondary)
+                        
+                        HStack(spacing: 4) {
+                            StarRatingView(rating: .constant(userRating), starSize: 20, interactive: false)
+                            Text(String(format: "%.1f", userRating))
+                                .font(.subheadline)
+                                .bold()
+                                .foregroundStyle(AppTextColors.accent)
+                        }
+                    }
+                    .padding(.vertical, 8)
+                    .padding(.horizontal, 16)
+                    .background(
+                        RoundedRectangle(cornerRadius: 12)
+                            .fill(Color.white.opacity(0.1))
+                    )
+                }
+                
+                Text(displayMovie.overview)
+                    .font(.body)
+                    .foregroundStyle(AppTextColors.secondary)
+                    .multilineTextAlignment(.leading)
+                    .padding(.horizontal)
+            }
+            
+            // Collection Section
+            if let collection = collection {
+                Divider()
+                    .background(Color.white.opacity(0.2))
+                    .padding(.horizontal)
+                
+                MovieCollectionCarousel(
+                    collection: collection,
+                    currentMovieId: movie.id,
+                    selectedMovie: $selectedCollectionMovie
+                )
+            } else if isLoadingCollection {
+                VStack {
+                    ProgressView()
+                        .tint(AppTextColors.accent)
+                    Text("Loading collection...")
+                        .font(.caption)
+                        .foregroundStyle(AppTextColors.tertiary)
+                }
+                .frame(maxWidth: .infinity)
                 .padding()
             }
+            
+            // Where to Watch Section
+            if !isLoadingWatchProviders {
+                WatchProvidersView(providers: watchProviders)
             }
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Close") {
-                        dismiss()
-                    }
+            
+            // Action Buttons
+            actionButtons
+        }
+        .padding()
+    }
+    
+    // MARK: - Action Buttons
+    private var actionButtons: some View {
+        VStack(spacing: 12) {
+            if isInWatchlist {
+                HStack {
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundStyle(.green)
+                    Text("Added to Watchlist")
+                        .foregroundStyle(.secondary)
                 }
+                .font(.headline)
+                .frame(maxWidth: .infinity)
+                .padding()
+                .background(Color(.systemGray6))
+                .clipShape(RoundedRectangle(cornerRadius: 16))
+            } else {
+                Button {
+                    store.addToWatchlist(movie)
+                    dismiss()
+                } label: {
+                    Label("Add to Watchlist", systemImage: "plus.circle.fill")
+                        .font(.headline)
+                        .frame(maxWidth: .infinity)
+                        .padding()
+                        .background(AppGradient.blue)
+                        .foregroundStyle(.white)
+                        .clipShape(RoundedRectangle(cornerRadius: 16))
+                }
+                .disabled(isInArchive)
             }
-            .sheet(isPresented: $showRatingSheet) {
-                RatingSheet(
-                    rating: $currentRating,
-                    movie: movie,
-                    onSubmit: { rating in
-                        if rating > 0 {
-                            store.setRating(rating, for: movie)
-                        }
-                        store.markAsWatched(movie)
-                        dismiss()
-                    }
-                )
-                .presentationDetents([.medium])
-                .presentationDragIndicator(.visible)
-            }
-            .task {
-                await loadTrailer()
-                await loadTVShowDetails()
-                await loadCollection()
-                await loadWatchProviders()
-            }
-            .onAppear {
-                currentRating = store.getRating(for: movie.id) ?? 0.0
-            }
-            .sheet(item: $selectedCollectionMovie) { collectionMovie in
-                BrowseMovieDetailView(movie: collectionMovie)
-                    .environmentObject(store)
+            
+            if isInArchive {
+                HStack {
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundStyle(.green)
+                    Text("Already Watched")
+                        .foregroundStyle(.secondary)
+                }
+                .font(.headline)
+                .frame(maxWidth: .infinity)
+                .padding()
+                .background(Color(.systemGray6))
+                .clipShape(RoundedRectangle(cornerRadius: 16))
+            } else {
+                Button {
+                    showRatingSheet = true
+                } label: {
+                    Label("Mark as Watched", systemImage: "checkmark.circle.fill")
+                        .font(.headline)
+                        .frame(maxWidth: .infinity)
+                        .padding()
+                        .background(AppGradient.green)
+                        .foregroundStyle(.white)
+                        .clipShape(RoundedRectangle(cornerRadius: 16))
+                }
+                .disabled(isInWatchlist)
             }
         }
+        .padding(.horizontal)
+        .frame(maxWidth: 300)
     }
     
     private func loadTrailer() async {
@@ -321,6 +576,18 @@ struct BrowseMovieDetailView: View {
         do {
             // First, fetch movie details to check if it belongs to a collection
             let movieDetails = try await store.movieService.fetchMovieDetails(movieId: movie.id)
+            
+            // Store the runtime and director if available and we don't already have full details
+            if movieWithDetails == nil {
+                var updatedMovie = movie
+                if let runtime = movieDetails.runtime {
+                    updatedMovie.runtime = runtime
+                }
+                if let director = movieDetails.director {
+                    updatedMovie.director = director
+                }
+                movieWithDetails = updatedMovie
+            }
             
             if let collectionInfo = movieDetails.belongsToCollection {
                 // Fetch the full collection details

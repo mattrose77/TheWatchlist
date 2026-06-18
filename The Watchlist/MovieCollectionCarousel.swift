@@ -26,10 +26,11 @@ struct MovieCollectionCarousel: View {
                         .font(.title2)
                         .bold()
                         .foregroundStyle(AppTextColors.primary)
+                        .lineLimit(1)
                 }
                 
             }
-            .padding(.horizontal)
+            .padding(.horizontal, 75)
             
             // Horizontal Scroll of Collection Movies
             ScrollView(.horizontal, showsIndicators: false) {
@@ -44,7 +45,7 @@ struct MovieCollectionCarousel: View {
                         }
                     }
                 }
-                .padding(.horizontal)
+                .padding(.horizontal, 95)
             }
         }
         .padding(.vertical)
