@@ -102,6 +102,76 @@ class ProfileStats: ObservableObject {
         return titleGroups.values.contains { $0.count >= 3 }
     }
     
+    /// User has watched 10+ movies released in 2000 or earlier
+    var hasClassicsScholarAchievement: Bool {
+        let classicsCount = archive.filter { movie in
+            guard let releaseDateString = movie.releaseDate else { return false }
+            
+            // Parse year from release date (format: "YYYY-MM-DD")
+            let yearString = String(releaseDateString.prefix(4))
+            guard let year = Int(yearString) else { return false }
+            
+            return year <= 2000
+        }.count
+        
+        return classicsCount >= 10
+    }
+    
+    /// User has rated 25+ movies
+    var hasCriticsChoiceAchievement: Bool {
+        ratings.count >= 25
+    }
+    
+    /// User has given 10 movies a 5-star rating
+    var hasPerfectScoreAchievement: Bool {
+        let perfectRatings = ratings.values.filter { $0.rating >= 5.0 }.count
+        return perfectRatings >= 10
+    }
+    
+    /// User has rated a movie 1 star or lower
+    var hasHarshCriticAchievement: Bool {
+        ratings.values.contains { $0.rating <= 1.0 }
+    }
+    
+    /// User has watched 10+ movies under 90 minutes runtime
+    var hasSpeedDemonAchievement: Bool {
+        let shortMoviesCount = archive.filter { movie in
+            guard let runtime = movie.runtime else { return false }
+            return runtime < 90
+        }.count
+        
+        return shortMoviesCount >= 10
+    }
+    
+    /// User has watched 5+ movies over 3 hours long
+    var hasEpicViewerAchievement: Bool {
+        let epicMoviesCount = archive.filter { movie in
+            guard let runtime = movie.runtime else { return false }
+            return runtime >= 180
+        }.count
+        
+        return epicMoviesCount >= 5
+    }
+    
+    /// User has watched at least one movie from 5 different decades
+    var hasDecadeExplorerAchievement: Bool {
+        var decades = Set<Int>()
+        
+        for movie in archive {
+            guard let releaseDateString = movie.releaseDate else { continue }
+            
+            // Parse year from release date (format: "YYYY-MM-DD")
+            let yearString = String(releaseDateString.prefix(4))
+            guard let year = Int(yearString) else { continue }
+            
+            // Calculate decade (e.g., 1995 -> 1990, 2003 -> 2000)
+            let decade = (year / 10) * 10
+            decades.insert(decade)
+        }
+        
+        return decades.count >= 5
+    }
+    
     // MARK: - Data Methods
     
     /// Returns movies for a specific genre
@@ -132,7 +202,7 @@ class ProfileStats: ObservableObject {
                     if genreCounts[genre.id] != nil {
                         genreCounts[genre.id]?.count += 1
                     } else {
-                        genreCounts[genre.id] = (name: genre.name, count: 1)
+                        genreCounts[genre.id] = (name: genre.displayName, count: 1)
                     }
                     
                     // Build movies per genre

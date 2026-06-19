@@ -11,7 +11,6 @@ struct WatchlistView: View {
     @EnvironmentObject var store: MovieStore
     @State private var selectedMovie: Movie?
     @State private var selectedContentType: ContentType = .movies
-    @State private var showingProfile = false
     
     let columns = [
         GridItem(.flexible(), spacing: 12),
@@ -50,6 +49,14 @@ struct WatchlistView: View {
                     .ignoresSafeArea()
                 
                 VStack(spacing: 0) {
+                    // Custom Header with Title Centered
+                    Text("Watchlist")
+                        .font(.headline)
+                        .foregroundStyle(Color(hex: "0D1A22"))
+                        .padding(.horizontal)
+                        .padding(.top, 8)
+                        .padding(.bottom, 12)
+                    
                     // Content Type Picker (Movies / TV Shows)
                     Picker("Content Type", selection: $selectedContentType) {
                         ForEach(ContentType.allCases, id: \.self) { type in
@@ -110,19 +117,9 @@ struct WatchlistView: View {
                     }
                 }
             }
-            .navigationTitle("Watchlist")
+            .navigationTitle("")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        showingProfile = true
-                    } label: {
-                        Image(systemName: "person.circle.fill")
-                            .font(.system(size: 22))
-                            .foregroundStyle(AppTextColors.primary)
-                    }
-                }
-            }
+            .navigationBarHidden(true)
             .sheet(item: $selectedMovie) { movie in
                 MovieDetailView(movie: movie, isInWatchlist: true)
                     .environmentObject(store)

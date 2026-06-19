@@ -154,6 +154,16 @@ struct MovieResponse: Codable {
 struct Genre: Codable, Hashable, Identifiable {
     let id: Int
     let name: String
+    
+    /// Display name with shortened versions for better UI
+    var displayName: String {
+        switch name {
+        case "Science Fiction":
+            return "Sci-Fi"
+        default:
+            return name
+        }
+    }
 }
 
 

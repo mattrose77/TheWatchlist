@@ -11,7 +11,6 @@ struct BrowseView: View {
     @EnvironmentObject var store: MovieStore
     @State private var selectedMovie: Movie?
     @State private var showingSearch = false
-    @State private var showingProfile = false
     
     let columns = [
         GridItem(.flexible(), spacing: 12),
@@ -27,6 +26,15 @@ struct BrowseView: View {
                     .ignoresSafeArea()
                 
                 VStack(spacing: 0) {
+                    
+                    // Header with Browse title
+                    Text("Browse")
+                        .font(.headline)
+                        .foregroundStyle(Color(hex: "0D1A22"))
+                        .padding(.horizontal)
+                        .padding(.top, 8)
+                        .padding(.bottom, 12)
+                    
                     // Content Type Picker (Movies / TV Shows) with Search Button
                     HStack(spacing: 12) {
                         Picker("Content Type", selection: $store.selectedContentType) {
@@ -108,19 +116,7 @@ struct BrowseView: View {
                 }
             }
             }
-            .navigationTitle("Browse")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        showingProfile = true
-                    } label: {
-                        Image(systemName: "person.circle.fill")
-                            .font(.system(size: 22))
-                            .foregroundStyle(AppTextColors.primary)
-                    }
-                }
-            }
+            .navigationBarHidden(true)
             .task {
                 if store.availableMovies.isEmpty {
                     await store.loadMovies()
@@ -134,7 +130,6 @@ struct BrowseView: View {
                 SearchView()
                     .environmentObject(store)
             }
-            
         }
     }
 }

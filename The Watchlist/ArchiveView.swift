@@ -64,6 +64,29 @@ struct ArchiveView: View {
                     .ignoresSafeArea()
                 
                 VStack(spacing: 0) {
+                    
+                    // Header with Watched title and profile button
+                    ZStack {
+                        Text("Watched")
+                            .font(.headline)
+                            .foregroundStyle(Color(hex: "0D1A22"))
+                        
+                        HStack {
+                            Spacer()
+                            
+                            Button(action: {
+                                showingProfile = true
+                            }) {
+                                Image(systemName: "person.fill")
+                                    .font(.system(size: 16))
+                                    .foregroundStyle(Color(hex: "0D1A22"))
+                            }
+                        }
+                    }
+                    .padding(.horizontal)
+                    .padding(.top, 8)
+                    .padding(.bottom, 12)
+                    
                     // Statistics boxes
                     if !filteredArchive.isEmpty {
                         HStack(spacing: 12) {
@@ -86,7 +109,6 @@ struct ArchiveView: View {
                             )
                         }
                         .padding(.horizontal)
-                        .padding(.top, -10)
                         .padding(.bottom, 16)
                     }
                     
@@ -178,24 +200,14 @@ struct ArchiveView: View {
                     }
                 }
             }
-            .navigationTitle("Watched")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        showingProfile = true
-                    } label: {
-                        Image(systemName: "person.circle.fill")
-                            .font(.system(size: 22))
-                            .foregroundStyle(AppTextColors.primary)
-                    }
-                }
-            }
+            .navigationBarHidden(true)
             .sheet(item: $selectedMovie) { movie in
                 MovieDetailView(movie: movie, isInWatchlist: false)
                     .environmentObject(store)
             }
-            
+            .sheet(isPresented: $showingProfile) {
+                ProfileView(archive: store.archive, ratings: store.userRatings)
+            }
         }
     }
 }
