@@ -36,8 +36,8 @@ struct MovieCollectionCarousel: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 12) {
                     ForEach(collection.parts) { movie in
-                        // Don't show the current movie
-                        if movie.id != currentMovieId {
+                        // Only show movies that have a poster and aren't the current movie
+                        if movie.id != currentMovieId && movie.posterPath != nil {
                             CollectionMoviePoster(movie: movie)
                                 .onTapGesture {
                                     selectedMovie = movie

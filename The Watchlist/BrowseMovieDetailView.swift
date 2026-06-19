@@ -166,11 +166,14 @@ struct BrowseMovieDetailView: View {
                     // Title and Metadata - on the gradient background
                     VStack(alignment: .leading, spacing: 6) {
                         Text(displayMovie.title)
-                            .font(.title3)
+                            .font(displayMovie.title.count > 25 ? .body : .title3)
                             .bold()
                             .foregroundStyle(AppTextColors.primary)
                             .multilineTextAlignment(.leading)
-                            .lineLimit(3)
+                            .lineLimit(2)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.trailing, 40)
                         
                         // Metadata
                         VStack(alignment: .leading, spacing: 6) {
@@ -235,6 +238,7 @@ struct BrowseMovieDetailView: View {
                         }
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
+                    .offset(y: displayMovie.title.count > 25 ? -12 : 0)
                 }
                 .padding(.horizontal, 20)
                 
@@ -358,10 +362,14 @@ struct BrowseMovieDetailView: View {
             // Movie Info
             VStack(spacing: 16) {
                 Text(displayMovie.title)
-                    .font(.title)
+                    .font(displayMovie.title.count > 25 ? .title2 : .title)
                     .bold()
                     .foregroundStyle(AppTextColors.primary)
                     .multilineTextAlignment(.center)
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .padding(.horizontal, 20)
                 
                 HStack(spacing: 20) {
                     if displayMovie.voteAverage > 0.0 {

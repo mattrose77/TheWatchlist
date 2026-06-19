@@ -98,6 +98,11 @@ class MovieStore: ObservableObject {
         loadTopFour()
         loadUpNextQueue()
         performDataMigrationIfNeeded()
+        
+        // Run profile metadata migration on background task
+        Task {
+            await migrateProfileMetadataIfNeeded()
+        }
     }
     
     // MARK: - Data Migration
@@ -108,6 +113,10 @@ class MovieStore: ObservableObject {
         migrateToV3IfNeeded()
         // V4 migration: Top Four data validation and cleanup
         migrateToV4IfNeeded()
+        // V5 migration: Update existing movies with backdrop data
+        Task {
+            await migrateToV5IfNeeded()
+        }
     }
     
     /// Migration V3: Fix ratings that were lost during V2 migration
@@ -172,6 +181,262 @@ class MovieStore: ObservableObject {
         // Mark migration as complete
         UserDefaults.standard.set(true, forKey: migrationKey)
         print("✅ Migration V4 complete")
+    }
+    
+    /// Migration V5: Update existing movies with backdrop data
+    /// This migration fetches updated movie data from the API to ensure
+    /// all stored movies have backdrop images and other new properties
+    private func migrateToV5IfNeeded() async {
+        let migrationKey = "watchlist_migration_v5_complete"
+        
+        // Check if migration has already been completed
+        guard !UserDefaults.standard.bool(forKey: migrationKey) else {
+            return
+        }
+        
+        print("🔄 Starting migration V5: Updating movie backdrop data")
+        
+        var watchlistUpdated = false
+        var archiveUpdated = false
+        
+        // Update watchlist movies
+        for (index, movie) in watchlist.enumerated() {
+            // Only update if backdrop is missing
+            if movie.backdropPath == nil {
+                if let updatedMovie = await fetchUpdatedMovieData(for: movie) {
+                    watchlist[index] = updatedMovie
+                    watchlistUpdated = true
+                    print("✅ Updated backdrop for watchlist movie: \(movie.title)")
+                }
+            }
+        }
+        
+        // Update archive movies
+        for (index, movie) in archive.enumerated() {
+            // Only update if backdrop is missing
+            if movie.backdropPath == nil {
+                if let updatedMovie = await fetchUpdatedMovieData(for: movie) {
+                    archive[index] = updatedMovie
+                    archiveUpdated = true
+                    print("✅ Updated backdrop for archive movie: \(movie.title)")
+                }
+            }
+        }
+        
+        // Save if any updates were made
+        if watchlistUpdated {
+            saveWatchlist()
+        }
+        if archiveUpdated {
+            saveArchive()
+        }
+        
+        // Mark migration as complete
+        UserDefaults.standard.set(true, forKey: migrationKey)
+        print("✅ Migration V5 complete")
+    }
+    
+    /// Fetches updated movie data from the API
+    /// Returns a new Movie object with updated backdrop and other properties
+    private func fetchUpdatedMovieData(for movie: Movie) async -> Movie? {
+        do {
+            if movie.isTV {
+                // Fetch TV show details
+                let updatedMovie = try await movieService.fetchTVShowDetails(tvShowId: movie.id)
+                return updatedMovie
+            } else {
+                // Fetch movie details
+                let movieDetails = try await movieService.fetchMovieDetails(movieId: movie.id)
+                
+                // Create updated movie with new data
+                var updatedMovie = movie
+                if let runtime = movieDetails.runtime {
+                    updatedMovie.runtime = runtime
+                }
+                if let director = movieDetails.director {
+                    updatedMovie.director = director
+                }
+                // Backdrop should come from the original movie data returned by the API
+                // We need to fetch the full movie data to get the backdrop
+                let fullMovieData = try await movieService.fetchMovieBasicData(movieId: movie.id)
+                return fullMovieData
+            }
+        } catch {
+            print("⚠️ Failed to fetch updated data for movie \(movie.title): \(error)")
+            return nil
+        }
+    }
+    
+    
+    // MARK: - Profile Metadata Migration
+    
+    /// Migration V6: Backfill genre, runtime, and poster data for profile statistics
+    /// This migration enriches existing watched items with metadata needed for the profile screen
+    @MainActor
+    private func migrateProfileMetadataIfNeeded() async {
+        let migrationKey = "didMigrateProfileMetadata_v1"
+        
+        // Check if migration has already been completed
+        guard !UserDefaults.standard.bool(forKey: migrationKey) else {
+            print("✅ Profile metadata migration already complete")
+            return
+        }
+        
+        print("🔄 Starting Profile metadata migration (V6): Backfilling genres, runtime, and posters")
+        
+        let apiKey = "3e53f26a4303447ddc429900ac7ced1a"
+        let baseURL = "https://api.themoviedb.org/3"
+        
+        var archiveUpdated = false
+        
+        // Process each archived item
+        for (index, movie) in archive.enumerated() {
+            // Skip if this movie already has complete metadata
+            let hasGenres = movie.genres != nil && !(movie.genres?.isEmpty ?? true)
+            let hasRuntime = movie.runtime != nil && movie.runtime! > 0
+            let hasPoster = movie.posterPath != nil
+            
+            if hasGenres && hasRuntime && hasPoster {
+                // Already complete, skip
+                continue
+            }
+            
+            // Fetch updated metadata from TMDB
+            do {
+                let mediaType = movie.isTV ? "tv" : "movie"
+                print("📡 Fetching metadata for \(movie.title) (ID: \(movie.id), type: \(mediaType))")
+                
+                if movie.isTV {
+                    // For TV shows: fetch details with credits
+                    let urlString = "\(baseURL)/tv/\(movie.id)?api_key=\(apiKey)&language=en-US&append_to_response=credits"
+                    guard let url = URL(string: urlString) else { continue }
+                    
+                    let (data, _) = try await URLSession.shared.data(from: url)
+                    let decoder = JSONDecoder()
+                    
+                    // Decode the full TV show details
+                    struct TVShowDetails: Codable {
+                        let id: Int
+                        let name: String
+                        let genres: [Genre]
+                        let posterPath: String?
+                        let episodeRunTime: [Int]
+                        let numberOfSeasons: Int?
+                        let numberOfEpisodes: Int?
+                        
+                        enum CodingKeys: String, CodingKey {
+                            case id, name, genres
+                            case posterPath = "poster_path"
+                            case episodeRunTime = "episode_run_time"
+                            case numberOfSeasons = "number_of_seasons"
+                            case numberOfEpisodes = "number_of_episodes"
+                        }
+                    }
+                    
+                    let details = try decoder.decode(TVShowDetails.self, from: data)
+                    
+                    // Calculate estimated runtime for TV shows
+                    // Use average episode runtime × number of episodes as a rough estimate
+                    var estimatedRuntime: Int?
+                    if let avgEpisodeRuntime = details.episodeRunTime.first,
+                       let totalEpisodes = details.numberOfEpisodes {
+                        // Estimate: average episode time × total episodes
+                        estimatedRuntime = avgEpisodeRuntime * totalEpisodes
+                        print("   📺 Estimated TV runtime: \(avgEpisodeRuntime)min/ep × \(totalEpisodes) eps = \(estimatedRuntime ?? 0)min total")
+                    }
+                    
+                    // Update the movie with new metadata
+                    // Create a new Movie with updated fields (posterPath is immutable)
+                    let updatedPosterPath = movie.posterPath ?? details.posterPath
+                    
+                    let updatedMovie = Movie(
+                        id: movie.id,
+                        title: movie.title,
+                        overview: movie.overview,
+                        posterPath: updatedPosterPath,
+                        backdropPath: movie.backdropPath,
+                        releaseDate: movie.releaseDate,
+                        voteAverage: movie.voteAverage,
+                        mediaType: movie.mediaType,
+                        numberOfSeasons: movie.numberOfSeasons,
+                        runtime: estimatedRuntime,
+                        director: movie.director,
+                        genreIds: movie.genreIds,
+                        genres: details.genres
+                    )
+                    
+                    archive[index] = updatedMovie
+                    archiveUpdated = true
+                    print("   ✅ Updated \(movie.title) with \(details.genres.count) genres")
+                    
+                } else {
+                    // For movies: fetch details with credits
+                    let urlString = "\(baseURL)/movie/\(movie.id)?api_key=\(apiKey)&language=en-US&append_to_response=credits"
+                    guard let url = URL(string: urlString) else { continue }
+                    
+                    let (data, _) = try await URLSession.shared.data(from: url)
+                    let decoder = JSONDecoder()
+                    
+                    // Decode the full movie details
+                    struct MovieDetailsWithGenres: Codable {
+                        let id: Int
+                        let title: String
+                        let genres: [Genre]
+                        let runtime: Int?
+                        let posterPath: String?
+                        
+                        enum CodingKeys: String, CodingKey {
+                            case id, title, genres, runtime
+                            case posterPath = "poster_path"
+                        }
+                    }
+                    
+                    let details = try decoder.decode(MovieDetailsWithGenres.self, from: data)
+                    
+                    // Update the movie with new metadata
+                    // Create a new Movie with updated fields (posterPath is immutable)
+                    let updatedPosterPath = movie.posterPath ?? details.posterPath
+                    
+                    let updatedMovie = Movie(
+                        id: movie.id,
+                        title: movie.title,
+                        overview: movie.overview,
+                        posterPath: updatedPosterPath,
+                        backdropPath: movie.backdropPath,
+                        releaseDate: movie.releaseDate,
+                        voteAverage: movie.voteAverage,
+                        mediaType: movie.mediaType,
+                        numberOfSeasons: movie.numberOfSeasons,
+                        runtime: details.runtime,
+                        director: movie.director,
+                        genreIds: movie.genreIds,
+                        genres: details.genres
+                    )
+                    
+                    archive[index] = updatedMovie
+                    archiveUpdated = true
+                    print("   ✅ Updated \(movie.title) with \(details.genres.count) genres, runtime: \(details.runtime ?? 0)min")
+                }
+                
+                // Small delay to respect TMDB rate limits (40 requests per 10 seconds)
+                try await Task.sleep(nanoseconds: 300_000_000) // 0.3 seconds
+                
+            } catch {
+                print("   ⚠️ Failed to fetch metadata for \(movie.title): \(error.localizedDescription)")
+                // Continue with next item, don't let one failure stop the whole migration
+                continue
+            }
+        }
+        
+        // Save updated archive if any changes were made
+        if archiveUpdated {
+            saveArchive()
+            print("💾 Saved updated archive with enriched metadata")
+        }
+        
+        // Mark migration as complete
+        UserDefaults.standard.set(true, forKey: migrationKey)
+        print("✅ Profile metadata migration (V6) complete")
     }
     
     // MARK: - Persistence Methods
@@ -663,6 +928,26 @@ class MovieStore: ObservableObject {
         let ids = getUpNextQueue(for: contentType)
         return ids.compactMap { id in
             watchlist.first { $0.id == id }
+        }
+    }
+    
+    // MARK: - Movie Update Utilities
+    
+    /// Updates a movie in the watchlist or archive with fresh data from the API
+    /// This is useful for ensuring movies have the latest information (e.g., backdrop images)
+    func refreshMovie(_ movie: Movie) async {
+        guard let updatedMovie = await fetchUpdatedMovieData(for: movie) else {
+            return
+        }
+        
+        // Update in watchlist if present
+        if let index = watchlist.firstIndex(where: { $0.id == movie.id }) {
+            watchlist[index] = updatedMovie
+        }
+        
+        // Update in archive if present
+        if let index = archive.firstIndex(where: { $0.id == movie.id }) {
+            archive[index] = updatedMovie
         }
     }
 }

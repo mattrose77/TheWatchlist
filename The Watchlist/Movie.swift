@@ -19,6 +19,8 @@ struct Movie: Identifiable, Codable, Hashable {
     var numberOfSeasons: Int? // For TV shows only
     var runtime: Int? // Runtime in minutes (for movies only)
     var director: String? // Director name (for movies only)
+    var genreIds: [Int]? // Genre IDs from TMDB
+    var genres: [Genre]? // Genre objects with id and name
     
     enum CodingKeys: String, CodingKey {
         case id, title, name, overview
@@ -31,10 +33,12 @@ struct Movie: Identifiable, Codable, Hashable {
         case numberOfSeasons = "number_of_seasons"
         case runtime
         case director
+        case genreIds = "genre_ids"
+        case genres
     }
     
     // Memberwise initializer for testing and previews
-    init(id: Int, title: String, overview: String, posterPath: String?, backdropPath: String? = nil, releaseDate: String?, voteAverage: Double, mediaType: String? = nil, numberOfSeasons: Int? = nil, runtime: Int? = nil, director: String? = nil) {
+    init(id: Int, title: String, overview: String, posterPath: String?, backdropPath: String? = nil, releaseDate: String?, voteAverage: Double, mediaType: String? = nil, numberOfSeasons: Int? = nil, runtime: Int? = nil, director: String? = nil, genreIds: [Int]? = nil, genres: [Genre]? = nil) {
         self.id = id
         self.title = title
         self.overview = overview
@@ -46,6 +50,8 @@ struct Movie: Identifiable, Codable, Hashable {
         self.numberOfSeasons = numberOfSeasons
         self.runtime = runtime
         self.director = director
+        self.genreIds = genreIds
+        self.genres = genres
     }
     
     init(from decoder: Decoder) throws {
@@ -80,6 +86,8 @@ struct Movie: Identifiable, Codable, Hashable {
         numberOfSeasons = try? container.decode(Int.self, forKey: .numberOfSeasons)
         runtime = try? container.decode(Int.self, forKey: .runtime)
         director = try? container.decode(String.self, forKey: .director)
+        genreIds = try? container.decode([Int].self, forKey: .genreIds)
+        genres = try? container.decode([Genre].self, forKey: .genres)
     }
     
     // Encoder for when we need to save data
@@ -96,6 +104,8 @@ struct Movie: Identifiable, Codable, Hashable {
         try container.encodeIfPresent(numberOfSeasons, forKey: .numberOfSeasons)
         try container.encodeIfPresent(runtime, forKey: .runtime)
         try container.encodeIfPresent(director, forKey: .director)
+        try container.encodeIfPresent(genreIds, forKey: .genreIds)
+        try container.encodeIfPresent(genres, forKey: .genres)
     }
     
     var posterURL: URL? {
@@ -139,3 +149,11 @@ struct Movie: Identifiable, Codable, Hashable {
 struct MovieResponse: Codable {
     let results: [Movie]
 }
+// MARK: - Genre
+
+struct Genre: Codable, Hashable, Identifiable {
+    let id: Int
+    let name: String
+}
+
+

@@ -11,6 +11,7 @@ struct WatchlistView: View {
     @EnvironmentObject var store: MovieStore
     @State private var selectedMovie: Movie?
     @State private var selectedContentType: ContentType = .movies
+    @State private var showingProfile = false
     
     let columns = [
         GridItem(.flexible(), spacing: 12),
@@ -111,6 +112,17 @@ struct WatchlistView: View {
             }
             .navigationTitle("Watchlist")
             .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        showingProfile = true
+                    } label: {
+                        Image(systemName: "person.circle.fill")
+                            .font(.system(size: 22))
+                            .foregroundStyle(AppTextColors.primary)
+                    }
+                }
+            }
             .sheet(item: $selectedMovie) { movie in
                 MovieDetailView(movie: movie, isInWatchlist: true)
                     .environmentObject(store)

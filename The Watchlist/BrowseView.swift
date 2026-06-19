@@ -11,6 +11,7 @@ struct BrowseView: View {
     @EnvironmentObject var store: MovieStore
     @State private var selectedMovie: Movie?
     @State private var showingSearch = false
+    @State private var showingProfile = false
     
     let columns = [
         GridItem(.flexible(), spacing: 12),
@@ -109,6 +110,17 @@ struct BrowseView: View {
             }
             .navigationTitle("Browse")
             .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        showingProfile = true
+                    } label: {
+                        Image(systemName: "person.circle.fill")
+                            .font(.system(size: 22))
+                            .foregroundStyle(AppTextColors.primary)
+                    }
+                }
+            }
             .task {
                 if store.availableMovies.isEmpty {
                     await store.loadMovies()
@@ -122,6 +134,7 @@ struct BrowseView: View {
                 SearchView()
                     .environmentObject(store)
             }
+            
         }
     }
 }

@@ -157,13 +157,36 @@ struct WatchProvider: Codable, Identifiable {
 struct WatchProviderData: Codable {
     let link: String?
     let flatrate: [WatchProvider]?
+    let free: [WatchProvider]?
     let buy: [WatchProvider]?
     let rent: [WatchProvider]?
     
-    // Get only streaming providers (flatrate)
+    // Get streaming providers (both flatrate and free with ads)
     var streamingProviders: [WatchProvider] {
-        guard let flatrate = flatrate else { return [] }
-        return flatrate.sorted { $0.displayPriority < $1.displayPriority }
+        var providers: [WatchProvider] = []
+        var seenIds = Set<Int>()
+        
+        // Add flatrate (subscription) providers first
+        if let flatrate = flatrate {
+            for provider in flatrate {
+                if !seenIds.contains(provider.providerId) {
+                    providers.append(provider)
+                    seenIds.insert(provider.providerId)
+                }
+            }
+        }
+        
+        // Then add free (ad-supported) providers
+        if let free = free {
+            for provider in free {
+                if !seenIds.contains(provider.providerId) {
+                    providers.append(provider)
+                    seenIds.insert(provider.providerId)
+                }
+            }
+        }
+        
+        return providers.sorted { $0.displayPriority < $1.displayPriority }
     }
     
     // Get all unique providers (prioritize streaming)
@@ -171,9 +194,19 @@ struct WatchProviderData: Codable {
         var providers: [WatchProvider] = []
         var seenIds = Set<Int>()
         
-        // Add streaming providers first
+        // Add flatrate streaming providers first
         if let flatrate = flatrate {
             for provider in flatrate {
+                if !seenIds.contains(provider.providerId) {
+                    providers.append(provider)
+                    seenIds.insert(provider.providerId)
+                }
+            }
+        }
+        
+        // Then free (ad-supported) providers
+        if let free = free {
+            for provider in free {
                 if !seenIds.contains(provider.providerId) {
                     providers.append(provider)
                     seenIds.insert(provider.providerId)
@@ -422,6 +455,31 @@ class MovieService: ObservableObject {
         return tvShow
     }
     
+    // Fetch complete movie data (including backdrop, runtime, etc.)
+    func fetchMovieBasicData(movieId: Int) async throws -> Movie {
+        let urlString = "\(baseURL)/movie/\(movieId)?api_key=\(apiKey)&language=en-US&append_to_response=credits"
+        
+        guard let url = URL(string: urlString) else {
+            throw URLError(.badURL)
+        }
+        
+        let (data, _) = try await URLSession.shared.data(from: url)
+        
+        // Decode as Movie to get all the fields including backdrop
+        var movie = try JSONDecoder().decode(Movie.self, from: data)
+        
+        // Also decode as MovieDetails to get director info
+        let details = try JSONDecoder().decode(MovieDetails.self, from: data)
+        if let director = details.director {
+            movie.director = director
+        }
+        
+        // Ensure mediaType is set
+        movie.mediaType = "movie"
+        
+        return movie
+    }
+    
     // Fetch watch providers (where to watch)
     func fetchWatchProviders(for movieId: Int, contentType: ContentType) async throws -> WatchProviderData? {
         let mediaType = contentType == .movies ? "movie" : "tv"
@@ -432,7 +490,26 @@ class MovieService: ObservableObject {
         }
         
         let (data, _) = try await URLSession.shared.data(from: url)
+        
+        // Debug: Print raw JSON response
+        if let jsonString = String(data: data, encoding: .utf8) {
+            print("🎬 Watch Providers API Response for \(mediaType) \(movieId):")
+            print(jsonString)
+        }
+        
         let response = try JSONDecoder().decode(WatchProviderResults.self, from: data)
+        
+        // Debug: Print what we got for UK
+        if let ukProviders = response.ukProviders {
+            print("🇬🇧 UK Providers found:")
+            print("   Flatrate: \(ukProviders.flatrate?.map { $0.providerName } ?? [])")
+            print("   Free: \(ukProviders.free?.map { $0.providerName } ?? [])")
+            print("   Buy: \(ukProviders.buy?.map { $0.providerName } ?? [])")
+            print("   Rent: \(ukProviders.rent?.map { $0.providerName } ?? [])")
+            print("   Streaming providers returned: \(ukProviders.streamingProviders.map { $0.providerName })")
+        } else {
+            print("⚠️ No UK providers found")
+        }
         
         return response.ukProviders
     }
