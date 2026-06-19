@@ -13,8 +13,9 @@ struct ProfileView: View {
     @State private var selectedGenreId: Int?
     @State private var showingEditProfile = false
     @State private var selectedAchievement: AchievementInfo?
-    @State private var showingAchievementDetail = false
+    @State private var expandedGenreId: Int?
     @AppStorage("userName") private var userName = "Add Name"
+    @AppStorage("userAvatar") private var userAvatar = ""
     
     init(archive: [Movie], ratings: [Int: UserRating]) {
         _stats = StateObject(wrappedValue: ProfileStats(archive: archive, ratings: ratings))
@@ -51,12 +52,10 @@ struct ProfileView: View {
         .sheet(isPresented: $showingEditProfile) {
             EditProfileView()
         }
-        .sheet(isPresented: $showingAchievementDetail) {
-            if let achievement = selectedAchievement {
-                AchievementDetailView(achievement: achievement)
-                    .presentationDetents([.height(350)])
-                    .presentationDragIndicator(.visible)
-            }
+        .sheet(item: $selectedAchievement) { achievement in
+            AchievementDetailView(achievement: achievement)
+                .presentationDetents([.height(350)])
+                .presentationDragIndicator(.visible)
         }
     }
     
@@ -89,20 +88,31 @@ struct ProfileView: View {
         HStack(spacing: 12) {
             // Avatar
             ZStack {
-                LinearGradient(
-                    colors: [
-                        Color(hex: "0E3D3A"), // Teal brand gradient start
-                        Color(hex: "1A6B5A")  // Teal brand gradient end
-                    ],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-                .frame(width: 64, height: 64)
-                .clipShape(Circle())
-                
-                Text(String((userName == "Add Name" ? "A" : userName).prefix(1)).uppercased())
-                    .font(.system(size: 28, weight: .bold))
-                    .foregroundColor(.white)
+                if !userAvatar.isEmpty {
+                    // Show emoji avatar
+                    Circle()
+                        .fill(Color.white.opacity(0.1))
+                        .frame(width: 64, height: 64)
+                    
+                    Text(userAvatar)
+                        .font(.system(size: 32))
+                } else {
+                    // Show gradient with initial
+                    LinearGradient(
+                        colors: [
+                            Color(hex: "0E3D3A"), // Teal brand gradient start
+                            Color(hex: "1A6B5A")  // Teal brand gradient end
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                    .frame(width: 64, height: 64)
+                    .clipShape(Circle())
+                    
+                    Text(String((userName == "Add Name" ? "A" : userName).prefix(1)).uppercased())
+                        .font(.system(size: 28, weight: .bold))
+                        .foregroundColor(.white)
+                }
             }
             
             // Name and handle
@@ -162,29 +172,33 @@ struct ProfileView: View {
                     .foregroundColor(.white.opacity(0.7))
             }
             
-            // Progress bar for top genre
-            if let topGenre = stats.topGenres.first {
-                VStack(alignment: .leading, spacing: 8) {
-                    // Progress bar
+            // Multi-genre progress bar
+            if !stats.topGenres.isEmpty {
+                VStack(alignment: .leading, spacing: 12) {
+                    // Progress bar with multiple colors
                     GeometryReader { geometry in
-                        ZStack(alignment: .leading) {
-                            // Background
-                            Capsule()
-                                .fill(Color.white.opacity(0.2))
-                                .frame(height: 6)
-                            
-                            // Fill
-                            Capsule()
-                                .fill(Color(hex: "E8B64C"))
-                                .frame(width: geometry.size.width * (stats.topGenreSharePercent / 100.0), height: 6)
+                        HStack(spacing: 0) {
+                            ForEach(Array(stats.topGenres.enumerated()), id: \.element.id) { index, genre in
+                                // Calculate the total count for normalization
+                                let totalCount = stats.topGenres.reduce(0) { $0 + $1.count }
+                                let normalizedPercentage = Double(genre.count) / Double(totalCount)
+                                let width = geometry.size.width * normalizedPercentage
+                                
+                                Rectangle()
+                                    .fill(genreColor(for: index))
+                                    .frame(width: width, height: 6)
+                            }
                         }
+                        .clipShape(Capsule())
                     }
                     .frame(height: 6)
                     
-                    // Genre label
-                    Text("\(topGenre.name) · \(Int(stats.topGenreSharePercent))%")
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundColor(.white.opacity(0.8))
+                    // Genre labels with percentages
+                    VStack(alignment: .leading, spacing: 6) {
+                        ForEach(Array(stats.topGenres.enumerated()), id: \.element.id) { index, genre in
+                            genrePercentageRow(genre: genre, index: index)
+                        }
+                    }
                 }
             }
         }
@@ -203,6 +217,62 @@ struct ProfileView: View {
                     )
                 )
         )
+    }
+    
+    // Helper function to get color for each genre
+    private func genreColor(for index: Int) -> Color {
+        let colors = [
+            Color(hex: "E8B64C"), // Gold
+            Color(hex: "FF6B6B"), // Red
+            Color(hex: "4ECDC4"), // Cyan
+            Color(hex: "95E1D3"), // Mint
+            Color(hex: "F38181")  // Pink
+        ]
+        return colors[index % colors.count]
+    }
+    
+    // Helper view for genre percentage row
+    @ViewBuilder
+    private func genrePercentageRow(genre: GenreRank, index: Int) -> some View {
+        let totalGenreCount = stats.topGenres.reduce(0) { $0 + $1.count }
+        let exactPercentage = (Double(genre.count) / Double(totalGenreCount)) * 100.0
+        let percentage = calculatePercentage(exactPercentage: exactPercentage, index: index, totalGenreCount: totalGenreCount)
+        
+        HStack(spacing: 8) {
+            Circle()
+                .fill(genreColor(for: index))
+                .frame(width: 8, height: 8)
+            
+            Text(genre.name)
+                .font(.system(size: 13, weight: .medium))
+                .foregroundColor(.white.opacity(0.9))
+            
+            Spacer()
+            
+            Text("\(percentage)%")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundColor(.white.opacity(0.7))
+        }
+    }
+    
+    // Helper function to calculate percentage, ensuring total adds to 100%
+    private func calculatePercentage(exactPercentage: Double, index: Int, totalGenreCount: Int) -> Int {
+        if index == stats.topGenres.count - 1 {
+            // Last item: calculate remainder to ensure 100% total
+            let sumSoFar = calculateSumOfPreviousPercentages(totalGenreCount: totalGenreCount)
+            return 100 - sumSoFar
+        } else {
+            return Int(exactPercentage.rounded())
+        }
+    }
+    
+    // Helper function to calculate sum of previous percentages
+    private func calculateSumOfPreviousPercentages(totalGenreCount: Int) -> Int {
+        let previousGenres = stats.topGenres.prefix(stats.topGenres.count - 1)
+        return previousGenres.reduce(0) { sum, genre in
+            let pct = (Double(genre.count) / Double(totalGenreCount)) * 100.0
+            return sum + Int(pct.rounded())
+        }
     }
     
     // MARK: - Top Genres Section
@@ -226,15 +296,15 @@ struct ProfileView: View {
             }
             
             // Poster row for selected genre
-            if let selectedId = selectedGenreId ?? stats.topGenres.first?.id {
+            if let selectedId = selectedGenreId ?? stats.topGenres.first?.id,
+               let selectedGenre = stats.topGenres.first(where: { $0.id == selectedId }) {
+                let allMovies = stats.moviesForGenre(genreId: selectedId)
+                
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 12) {
-                        ForEach(stats.moviesForGenre(genreId: selectedId)) { movie in
+                        ForEach(allMovies) { movie in
                             posterCard(for: movie)
                         }
-                        
-                        // "See all" tile
-                        seeAllTile
                     }
                     .padding(.horizontal, 20)
                 }
@@ -281,71 +351,32 @@ struct ProfileView: View {
     }
     
     private func posterCard(for movie: WatchedMovieForGenre) -> some View {
-        ZStack(alignment: .bottom) {
-            // Poster image
-            AsyncImage(url: movie.posterURL) { phase in
-                switch phase {
-                case .empty:
-                    Rectangle()
-                        .fill(Color(hex: "0D1A22").opacity(0.3))
-                        .overlay(
-                            ProgressView()
-                                .tint(.white)
-                        )
-                case .success(let image):
-                    image
-                        .resizable()
-                        .aspectRatio(contentMode: .fill)
-                case .failure:
-                    Rectangle()
-                        .fill(Color(hex: "0D1A22").opacity(0.3))
-                        .overlay(
-                            Image(systemName: "photo")
-                                .foregroundColor(.white.opacity(0.5))
-                        )
-                @unknown default:
-                    EmptyView()
-                }
-            }
-            .frame(width: 94, height: 134)
-            .clipShape(RoundedRectangle(cornerRadius: 12))
-            
-            // Title scrim (bottom)
-            VStack {
-                Spacer()
-                
-                Text(movie.title)
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundColor(.white)
-                    .lineLimit(2)
-                    .multilineTextAlignment(.leading)
-                    .padding(8)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(
-                        LinearGradient(
-                            colors: [
-                                Color.clear,
-                                Color.black.opacity(0.8)
-                            ],
-                            startPoint: .top,
-                            endPoint: .bottom
-                        )
+        AsyncImage(url: movie.posterURL) { phase in
+            switch phase {
+            case .empty:
+                Rectangle()
+                    .fill(Color(hex: "0D1A22").opacity(0.3))
+                    .overlay(
+                        ProgressView()
+                            .tint(.white)
                     )
+            case .success(let image):
+                image
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+            case .failure:
+                Rectangle()
+                    .fill(Color(hex: "0D1A22").opacity(0.3))
+                    .overlay(
+                        Image(systemName: "photo")
+                            .foregroundColor(.white.opacity(0.5))
+                    )
+            @unknown default:
+                EmptyView()
             }
-            .frame(width: 94, height: 134)
-            .clipShape(RoundedRectangle(cornerRadius: 12))
         }
-    }
-    
-    private var seeAllTile: some View {
-        RoundedRectangle(cornerRadius: 12)
-            .fill(Color(hex: "1A6B5A").opacity(0.3))
-            .overlay(
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 20, weight: .semibold))
-                    .foregroundColor(.white.opacity(0.6))
-            )
-            .frame(width: 60, height: 134)
+        .frame(width: 94, height: 134)
+        .clipShape(RoundedRectangle(cornerRadius: 12))
     }
     
     // MARK: - Achievements Section
@@ -468,7 +499,6 @@ struct ProfileView: View {
                 unlocked: unlocked,
                 color: color
             )
-            showingAchievementDetail = true
         }) {
             VStack(spacing: 8) {
                 ZStack(alignment: .topTrailing) {
@@ -520,7 +550,8 @@ struct ProfileView: View {
 
 // MARK: - Supporting Models
 
-struct AchievementInfo {
+struct AchievementInfo: Identifiable {
+    let id = UUID()
     let icon: String
     let title: String
     let description: String
@@ -610,6 +641,107 @@ struct AchievementDetailView: View {
     }
 }
 
+// MARK: - Genre Movies View
+
+struct GenreMoviesView: View {
+    let genre: GenreRank
+    let movies: [WatchedMovieForGenre]
+    @Environment(\.dismiss) private var dismiss
+    
+    var body: some View {
+        NavigationView {
+            VStack(spacing: 0) {
+                // Header
+                HStack {
+                    Button(action: {
+                        dismiss()
+                    }) {
+                        Image(systemName: "chevron.left")
+                            .font(.system(size: 20, weight: .semibold))
+                            .foregroundColor(Color(hex: "0D1A22"))
+                    }
+                    
+                    Spacer()
+                    
+                    VStack(spacing: 2) {
+                        Text(genre.name)
+                            .font(.system(size: 17, weight: .semibold))
+                            .foregroundColor(Color(hex: "0D1A22"))
+                        
+                        Text("\(genre.count) movies")
+                            .font(.system(size: 12))
+                            .foregroundColor(Color(hex: "0D1A22").opacity(0.6))
+                    }
+                    
+                    Spacer()
+                    
+                    // Invisible spacer to balance the chevron
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: 20, weight: .semibold))
+                        .opacity(0)
+                }
+                .padding(.horizontal, 20)
+                .padding(.vertical, 16)
+                
+                // Horizontal scroll view with all posters
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 12) {
+                        ForEach(movies) { movie in
+                            posterCard(for: movie)
+                        }
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 20)
+                }
+                
+                Spacer()
+            }
+            .background(
+                AppGradient.background
+                    .ignoresSafeArea()
+            )
+            .navigationBarHidden(true)
+        }
+    }
+    
+    private func posterCard(for movie: WatchedMovieForGenre) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            AsyncImage(url: movie.posterURL) { phase in
+                switch phase {
+                case .empty:
+                    Rectangle()
+                        .fill(Color(hex: "0D1A22").opacity(0.3))
+                        .overlay(
+                            ProgressView()
+                                .tint(.white)
+                        )
+                case .success(let image):
+                    image
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                case .failure:
+                    Rectangle()
+                        .fill(Color(hex: "0D1A22").opacity(0.3))
+                        .overlay(
+                            Image(systemName: "photo")
+                                .foregroundColor(.white.opacity(0.5))
+                        )
+                @unknown default:
+                    EmptyView()
+                }
+            }
+            .frame(width: 94, height: 134)
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+            
+            Text(movie.title)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundColor(AppTextColors.primary)
+                .lineLimit(2)
+                .frame(width: 94, alignment: .leading)
+        }
+    }
+}
+
 // MARK: - Preview
 
 #Preview("Profile with Sample Data") {
@@ -620,7 +752,7 @@ struct AchievementDetailView: View {
     let comedyGenre = Genre(id: 35, name: "Comedy")
     let thrillerGenre = Genre(id: 53, name: "Thriller")
     
-    // Sample archived movies
+    // Sample archived movies (with more drama films)
     let sampleMovies: [Movie] = [
         Movie(
             id: 1,
@@ -709,6 +841,83 @@ struct AchievementDetailView: View {
             mediaType: "movie",
             runtime: 164,
             genres: [sciFiGenre, thrillerGenre]
+        ),
+        Movie(
+            id: 9,
+            title: "The Godfather",
+            overview: "The aging patriarch of an organized crime dynasty...",
+            posterPath: "/3bhkrj58Vtu7enYsRolD1fZdja1.jpg",
+            releaseDate: "1972-03-14",
+            voteAverage: 8.7,
+            mediaType: "movie",
+            runtime: 175,
+            genres: [dramaGenre]
+        ),
+        Movie(
+            id: 10,
+            title: "Schindler's List",
+            overview: "The true story of Oskar Schindler...",
+            posterPath: "/sF1U4EUQS8YHUYjNl3pMGNIQyr0.jpg",
+            releaseDate: "1993-12-15",
+            voteAverage: 8.6,
+            mediaType: "movie",
+            runtime: 195,
+            genres: [dramaGenre]
+        ),
+        Movie(
+            id: 11,
+            title: "12 Angry Men",
+            overview: "The defense and the prosecution...",
+            posterPath: "/ow3wq89wM8qd5X7hWKxiRfsFf9C.jpg",
+            releaseDate: "1957-04-10",
+            voteAverage: 8.5,
+            mediaType: "movie",
+            runtime: 96,
+            genres: [dramaGenre]
+        ),
+        Movie(
+            id: 12,
+            title: "Fight Club",
+            overview: "A ticking-time-bomb insomniac...",
+            posterPath: "/pB8BM7pdSp6B6Ih7QZ4DrQ3PmJK.jpg",
+            releaseDate: "1999-10-15",
+            voteAverage: 8.4,
+            mediaType: "movie",
+            runtime: 139,
+            genres: [dramaGenre]
+        ),
+        Movie(
+            id: 13,
+            title: "Good Will Hunting",
+            overview: "Will Hunting, a janitor at MIT...",
+            posterPath: "/bABCBKYBK7A5G1x0FzoeoNfuj2.jpg",
+            releaseDate: "1997-12-05",
+            voteAverage: 8.2,
+            mediaType: "movie",
+            runtime: 126,
+            genres: [dramaGenre]
+        ),
+        Movie(
+            id: 14,
+            title: "The Green Mile",
+            overview: "A supernatural tale set on death row...",
+            posterPath: "/velWPhVMQeQKcxggNEU8YmIo52R.jpg",
+            releaseDate: "1999-12-10",
+            voteAverage: 8.5,
+            mediaType: "movie",
+            runtime: 189,
+            genres: [dramaGenre]
+        ),
+        Movie(
+            id: 15,
+            title: "A Beautiful Mind",
+            overview: "John Nash, a brilliant mathematician...",
+            posterPath: "/zwzWCmH72OSC9NA0ipoqw5Zjya8.jpg",
+            releaseDate: "2001-12-21",
+            voteAverage: 7.9,
+            mediaType: "movie",
+            runtime: 135,
+            genres: [dramaGenre]
         )
     ]
     
@@ -721,7 +930,14 @@ struct AchievementDetailView: View {
         5: UserRating(movieId: 5, rating: 4.5),
         6: UserRating(movieId: 6, rating: 5.0),
         7: UserRating(movieId: 7, rating: 4.0),
-        8: UserRating(movieId: 8, rating: 4.0)
+        8: UserRating(movieId: 8, rating: 4.0),
+        9: UserRating(movieId: 9, rating: 5.0),
+        10: UserRating(movieId: 10, rating: 5.0),
+        11: UserRating(movieId: 11, rating: 4.5),
+        12: UserRating(movieId: 12, rating: 4.5),
+        13: UserRating(movieId: 13, rating: 4.0),
+        14: UserRating(movieId: 14, rating: 4.5),
+        15: UserRating(movieId: 15, rating: 4.0)
     ]
     
     return ProfileView(archive: sampleMovies, ratings: sampleRatings)
@@ -750,3 +966,83 @@ struct AchievementDetailView: View {
         )
     )
 }
+#Preview("Genre Movies View") {
+    let sampleGenre = GenreRank(id: 18, name: "Drama", count: 12)
+    let sampleMovies: [WatchedMovieForGenre] = [
+        WatchedMovieForGenre(
+            id: 6,
+            title: "The Shawshank Redemption",
+            posterURL: URL(string: "https://image.tmdb.org/t/p/w500/q6y0Go1tsGEsmtFryDOJo3dEmqu.jpg"),
+            rating: 9.3
+        ),
+        WatchedMovieForGenre(
+            id: 9,
+            title: "The Godfather",
+            posterURL: URL(string: "https://image.tmdb.org/t/p/w500/3bhkrj58Vtu7enYsRolD1fZdja1.jpg"),
+            rating: 8.7
+        ),
+        WatchedMovieForGenre(
+            id: 10,
+            title: "Schindler's List",
+            posterURL: URL(string: "https://image.tmdb.org/t/p/w500/sF1U4EUQS8YHUYjNl3pMGNIQyr0.jpg"),
+            rating: 8.6
+        ),
+        WatchedMovieForGenre(
+            id: 11,
+            title: "12 Angry Men",
+            posterURL: URL(string: "https://image.tmdb.org/t/p/w500/ow3wq89wM8qd5X7hWKxiRfsFf9C.jpg"),
+            rating: 8.5
+        ),
+        WatchedMovieForGenre(
+            id: 12,
+            title: "Fight Club",
+            posterURL: URL(string: "https://image.tmdb.org/t/p/w500/pB8BM7pdSp6B6Ih7QZ4DrQ3PmJK.jpg"),
+            rating: 8.4
+        ),
+        WatchedMovieForGenre(
+            id: 3,
+            title: "Interstellar",
+            posterURL: URL(string: "https://image.tmdb.org/t/p/w500/gEU2QniE6E77NI6lCU6MxlNBvIx.jpg"),
+            rating: 8.6
+        ),
+        WatchedMovieForGenre(
+            id: 14,
+            title: "The Green Mile",
+            posterURL: URL(string: "https://image.tmdb.org/t/p/w500/velWPhVMQeQKcxggNEU8YmIo52R.jpg"),
+            rating: 8.5
+        ),
+        WatchedMovieForGenre(
+            id: 13,
+            title: "Good Will Hunting",
+            posterURL: URL(string: "https://image.tmdb.org/t/p/w500/bABCBKYBK7A5G1x0FzoeoNfuj2.jpg"),
+            rating: 8.2
+        ),
+        WatchedMovieForGenre(
+            id: 5,
+            title: "Pulp Fiction",
+            posterURL: URL(string: "https://image.tmdb.org/t/p/w500/d5iIlFn5s0ImszYzBPb8JPIfbXD.jpg"),
+            rating: 8.9
+        ),
+        WatchedMovieForGenre(
+            id: 7,
+            title: "Forrest Gump",
+            posterURL: URL(string: "https://image.tmdb.org/t/p/w500/arw2vcBveWOVZr6pxd9XTd1TdQa.jpg"),
+            rating: 8.8
+        ),
+        WatchedMovieForGenre(
+            id: 15,
+            title: "A Beautiful Mind",
+            posterURL: URL(string: "https://image.tmdb.org/t/p/w500/zwzWCmH72OSC9NA0ipoqw5Zjya8.jpg"),
+            rating: 7.9
+        ),
+        WatchedMovieForGenre(
+            id: 2,
+            title: "The Dark Knight",
+            posterURL: URL(string: "https://image.tmdb.org/t/p/w500/qJ2tW6WMUDux911r6m7haRef0WH.jpg"),
+            rating: 9.0
+        )
+    ]
+    
+    return GenreMoviesView(genre: sampleGenre, movies: sampleMovies)
+}
+

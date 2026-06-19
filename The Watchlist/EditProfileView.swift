@@ -10,8 +10,11 @@ import SwiftUI
 struct EditProfileView: View {
     @Environment(\.dismiss) private var dismiss
     @AppStorage("userName") private var userName = "Add Name"
+    @AppStorage("userAvatar") private var userAvatar = ""
     
     @State private var editedName: String = ""
+    @State private var editedAvatar: String = ""
+    @State private var showingEmojiPicker = false
     @State private var showingSaveConfirmation = false
     
     var body: some View {
@@ -82,6 +85,10 @@ struct EditProfileView: View {
             }
             .onAppear {
                 editedName = userName
+                editedAvatar = userAvatar
+            }
+            .sheet(isPresented: $showingEmojiPicker) {
+                EmojiPickerView(selectedEmoji: $editedAvatar)
             }
         }
     }
@@ -91,28 +98,51 @@ struct EditProfileView: View {
     private var avatarSection: some View {
         VStack(spacing: 16) {
             ZStack {
-                LinearGradient(
-                    colors: [
-                        Color(hex: "0E3D3A"),
-                        Color(hex: "1A6B5A")
-                    ],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-                .frame(width: 100, height: 100)
-                .clipShape(Circle())
-                
-                Text(String((editedName.isEmpty ? "AN" : editedName).prefix(1)).uppercased())
-                    .font(.system(size: 40, weight: .bold))
-                    .foregroundColor(.white)
+                // Show emoji if set, otherwise show gradient with initial
+                if !editedAvatar.isEmpty {
+                    Circle()
+                        .fill(Color.white.opacity(0.1))
+                        .frame(width: 100, height: 100)
+                        .overlay(
+                            Text(editedAvatar)
+                                .font(.system(size: 50))
+                        )
+                } else {
+                    LinearGradient(
+                        colors: [
+                            Color(hex: "0E3D3A"),
+                            Color(hex: "1A6B5A")
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                    .frame(width: 100, height: 100)
+                    .clipShape(Circle())
+                    
+                    Text(String((editedName.isEmpty ? "A" : editedName).prefix(1)).uppercased())
+                        .font(.system(size: 40, weight: .bold))
+                        .foregroundColor(.white)
+                }
             }
             
-            Button(action: {
-                // Future: Add avatar change functionality
-            }) {
-                Text("Change Avatar")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(.white)
+            HStack(spacing: 12) {
+                Button(action: {
+                    showingEmojiPicker = true
+                }) {
+                    Text("Choose Emoji")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(.white)
+                }
+                
+                if !editedAvatar.isEmpty {
+                    Button(action: {
+                        editedAvatar = ""
+                    }) {
+                        Text("Remove")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundColor(.white.opacity(0.6))
+                    }
+                }
             }
         }
     }
@@ -121,7 +151,77 @@ struct EditProfileView: View {
     
     private func saveChanges() {
         userName = editedName
+        userAvatar = editedAvatar
         showingSaveConfirmation = true
+    }
+}
+
+// MARK: - Emoji Picker View
+
+struct EmojiPickerView: View {
+    @Environment(\.dismiss) private var dismiss
+    @Binding var selectedEmoji: String
+    
+    // Popular emoji categories
+    private let emojiCategories: [(String, [String])] = [
+        ("Smileys", ["😀", "😃", "😄", "😁", "😆", "😅", "🤣", "😂", "🙂", "🙃", "😉", "😊", "😇", "🥰", "😍", "🤩", "😘", "😗", "😚", "😙", "🥲", "😋", "😛", "😜", "🤪", "😝", "🤑", "🤗", "🤭", "🤫", "🤔", "🤐", "🤨", "😐", "😑", "😶", "😏", "😒", "🙄", "😬"]),
+        ("Animals", ["🐶", "🐱", "🐭", "🐹", "🐰", "🦊", "🐻", "🐼", "🐨", "🐯", "🦁", "🐮", "🐷", "🐸", "🐵", "🐔", "🐧", "🐦", "🐤", "🦆", "🦅", "🦉", "🦇", "🐺", "🐗", "🐴", "🦄", "🐝", "🐛", "🦋", "🐌", "🐞", "🐢", "🐍", "🦎", "🦖", "🦕", "🐙", "🦑", "🦐"]),
+        ("Food", ["🍎", "🍊", "🍋", "🍌", "🍉", "🍇", "🍓", "🫐", "🍈", "🍒", "🍑", "🥭", "🍍", "🥥", "🥝", "🍅", "🥑", "🥦", "🥬", "🥒", "🌶", "🫑", "🌽", "🥕", "🫒", "🧄", "🧅", "🥔", "🍠", "🥐", "🥯", "🍞", "🥖", "🥨", "🧀", "🥚", "🍳", "🧈", "🥞", "🧇"]),
+        ("Activities", ["⚽️", "🏀", "🏈", "⚾️", "🥎", "🎾", "🏐", "🏉", "🥏", "🎱", "🏓", "🏸", "🏒", "🏑", "🥍", "🏏", "🥅", "⛳️", "🪁", "🏹", "🎣", "🤿", "🥊", "🥋", "🎽", "🛹", "🛼", "🛷", "⛸", "🥌", "🎿", "⛷", "🏂", "🪂", "🏋️", "🤼", "🤸", "🤺", "⛹️", "🤾"]),
+        ("Travel", ["🚗", "🚕", "🚙", "🚌", "🚎", "🏎", "🚓", "🚑", "🚒", "🚐", "🛻", "🚚", "🚛", "🚜", "🦯", "🦽", "🦼", "🛴", "🚲", "🛵", "🏍", "🛺", "🚨", "🚔", "🚍", "🚘", "🚖", "🚡", "🚠", "🚟", "🚃", "🚋", "🚞", "🚝", "🚄", "🚅", "🚈", "🚂", "🚆", "🚇"]),
+        ("Objects", ["⌚️", "📱", "💻", "⌨️", "🖥", "🖨", "🖱", "🖲", "🕹", "🗜", "💾", "💿", "📀", "📼", "📷", "📸", "📹", "🎥", "📽", "🎞", "📞", "☎️", "📟", "📠", "📺", "📻", "🎙", "🎚", "🎛", "🧭", "⏱", "⏲", "⏰", "🕰", "⌛️", "⏳", "📡", "🔋", "🔌", "💡"]),
+        ("Symbols", ["❤️", "🧡", "💛", "💚", "💙", "💜", "🖤", "🤍", "🤎", "💔", "❤️‍🔥", "❤️‍🩹", "💕", "💞", "💓", "💗", "💖", "💘", "💝", "⭐️", "🌟", "✨", "💫", "⚡️", "🔥", "💥", "☄️", "🌈", "☀️", "🌤", "⛅️", "🌥", "☁️", "🌦", "🌧", "⛈", "🌩", "🌨", "❄️", "☃️"])
+    ]
+    
+    var body: some View {
+        NavigationView {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 24) {
+                    ForEach(emojiCategories, id: \.0) { category, emojis in
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text(category)
+                                .font(.system(size: 18, weight: .bold))
+                                .foregroundColor(.white)
+                                .padding(.horizontal, 20)
+                            
+                            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: 7), spacing: 12) {
+                                ForEach(emojis, id: \.self) { emoji in
+                                    Button(action: {
+                                        selectedEmoji = emoji
+                                        dismiss()
+                                    }) {
+                                        Text(emoji)
+                                            .font(.system(size: 36))
+                                            .frame(width: 50, height: 50)
+                                            .background(
+                                                RoundedRectangle(cornerRadius: 10)
+                                                    .fill(Color.white.opacity(0.1))
+                                            )
+                                    }
+                                }
+                            }
+                            .padding(.horizontal, 20)
+                        }
+                    }
+                }
+                .padding(.vertical, 20)
+            }
+            .background(
+                AppGradient.background
+                    .ignoresSafeArea()
+            )
+            .navigationTitle("Choose Emoji")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") {
+                        dismiss()
+                    }
+                    .foregroundColor(.white)
+                }
+            }
+            .toolbarBackground(.hidden, for: .navigationBar)
+        }
     }
 }
 
@@ -130,3 +230,7 @@ struct EditProfileView: View {
 #Preview("Edit Profile") {
     EditProfileView()
 }
+#Preview("Emoji Picker") {
+    EmojiPickerView(selectedEmoji: .constant(""))
+}
+
