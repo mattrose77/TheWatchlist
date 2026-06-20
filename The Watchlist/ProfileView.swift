@@ -27,13 +27,15 @@ struct ProfileView: View {
                 // 1. Header
                 headerRow
                 
-                // 2. Identity row
-                identityRow
-                    .padding(.horizontal, 20)
-                
-                // 3. Watch-time hero card
-                watchTimeCard
-                    .padding(.horizontal, 20)
+                VStack(spacing: 24) {
+                    // 2. Identity row
+                    identityRow
+                        .padding(.horizontal, 20)
+                    
+                    // 3. Stats carousel (watch time + longest/shortest)
+                    StatsCarouselView(stats: stats)
+                        .padding(.horizontal, 20)
+                }
                 
                 // 4. Top genres section
                 topGenresSection
@@ -142,136 +144,6 @@ struct ProfileView: View {
                             .fill(Color.white.opacity(0.3))
                     )
             }
-        }
-    }
-    
-    // MARK: - Watch Time Card
-    
-    private var watchTimeCard: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            // Label with icon
-            HStack(spacing: 6) {
-                Image(systemName: "clock.fill")
-                    .font(.system(size: 12, weight: .bold))
-                    .foregroundColor(Color(hex: "E8B64C"))
-                
-                Text("TOTAL WATCH TIME")
-                    .font(.system(size: 12, weight: .bold))
-                    .foregroundColor(Color(hex: "E8B64C"))
-                    .tracking(0.5)
-            }
-            
-            // Total time
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Text(stats.formattedWatchTime)
-                    .font(.system(size: 48, weight: .bold))
-                    .foregroundColor(.white)
-                
-                Text("across \(stats.titlesCount) titles")
-                    .font(.system(size: 16))
-                    .foregroundColor(.white.opacity(0.7))
-            }
-            
-            // Multi-genre progress bar
-            if !stats.topGenres.isEmpty {
-                VStack(alignment: .leading, spacing: 12) {
-                    // Progress bar with multiple colors
-                    GeometryReader { geometry in
-                        HStack(spacing: 0) {
-                            ForEach(Array(stats.topGenres.enumerated()), id: \.element.id) { index, genre in
-                                // Calculate the total count for normalization
-                                let totalCount = stats.topGenres.reduce(0) { $0 + $1.count }
-                                let normalizedPercentage = Double(genre.count) / Double(totalCount)
-                                let width = geometry.size.width * normalizedPercentage
-                                
-                                Rectangle()
-                                    .fill(genreColor(for: index))
-                                    .frame(width: width, height: 6)
-                            }
-                        }
-                        .clipShape(Capsule())
-                    }
-                    .frame(height: 6)
-                    
-                    // Genre labels with percentages
-                    VStack(alignment: .leading, spacing: 6) {
-                        ForEach(Array(stats.topGenres.enumerated()), id: \.element.id) { index, genre in
-                            genrePercentageRow(genre: genre, index: index)
-                        }
-                    }
-                }
-            }
-        }
-        .padding(24)
-        .background(
-            RoundedRectangle(cornerRadius: 16)
-                .fill(
-                    LinearGradient(
-                        colors: [
-                            Color(hex: "0A1628"),
-                            Color(hex: "0E3D3A"),
-                            Color(hex: "1A6B5A")
-                        ],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
-        )
-    }
-    
-    // Helper function to get color for each genre
-    private func genreColor(for index: Int) -> Color {
-        let colors = [
-            Color(hex: "E8B64C"), // Gold
-            Color(hex: "FF6B6B"), // Red
-            Color(hex: "4ECDC4"), // Cyan
-            Color(hex: "95E1D3"), // Mint
-            Color(hex: "F38181")  // Pink
-        ]
-        return colors[index % colors.count]
-    }
-    
-    // Helper view for genre percentage row
-    @ViewBuilder
-    private func genrePercentageRow(genre: GenreRank, index: Int) -> some View {
-        let totalGenreCount = stats.topGenres.reduce(0) { $0 + $1.count }
-        let exactPercentage = (Double(genre.count) / Double(totalGenreCount)) * 100.0
-        let percentage = calculatePercentage(exactPercentage: exactPercentage, index: index, totalGenreCount: totalGenreCount)
-        
-        HStack(spacing: 8) {
-            Circle()
-                .fill(genreColor(for: index))
-                .frame(width: 8, height: 8)
-            
-            Text(genre.name)
-                .font(.system(size: 13, weight: .medium))
-                .foregroundColor(.white.opacity(0.9))
-            
-            Spacer()
-            
-            Text("\(percentage)%")
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundColor(.white.opacity(0.7))
-        }
-    }
-    
-    // Helper function to calculate percentage, ensuring total adds to 100%
-    private func calculatePercentage(exactPercentage: Double, index: Int, totalGenreCount: Int) -> Int {
-        if index == stats.topGenres.count - 1 {
-            // Last item: calculate remainder to ensure 100% total
-            let sumSoFar = calculateSumOfPreviousPercentages(totalGenreCount: totalGenreCount)
-            return 100 - sumSoFar
-        } else {
-            return Int(exactPercentage.rounded())
-        }
-    }
-    
-    // Helper function to calculate sum of previous percentages
-    private func calculateSumOfPreviousPercentages(totalGenreCount: Int) -> Int {
-        let previousGenres = stats.topGenres.prefix(stats.topGenres.count - 1)
-        return previousGenres.reduce(0) { sum, genre in
-            let pct = (Double(genre.count) / Double(totalGenreCount)) * 100.0
-            return sum + Int(pct.rounded())
         }
     }
     
@@ -483,7 +355,32 @@ struct ProfileView: View {
                     color: Color(hex: "E8B64C")
                 )
                 
-                // Empty placeholder to maintain grid
+                achievementBadge(
+                    icon: "sparkles",
+                    title: "Clean Slate",
+                    description: "Clear your entire watchlist by watching or removing all items.",
+                    unlocked: stats.hasCleanSlateAchievement,
+                    color: Color(hex: "1A6B5A")
+                )
+            }
+            
+            // Row 4
+            HStack(spacing: 16) {
+                achievementBadge(
+                    icon: "100",
+                    title: "Century Club",
+                    description: "Reach 100 total items across your watchlist and archive combined.",
+                    unlocked: stats.hasCenturyClubAchievement,
+                    color: Color(hex: "E8B64C")
+                )
+                
+                // Empty placeholders to maintain grid
+                Color.clear
+                    .frame(maxWidth: .infinity)
+                
+                Color.clear
+                    .frame(maxWidth: .infinity)
+                
                 Color.clear
                     .frame(maxWidth: .infinity)
             }
@@ -515,9 +412,16 @@ struct ProfileView: View {
                             )
                             .frame(width: 60, height: 60)
                         
-                        Image(systemName: icon)
-                            .font(.system(size: 24, weight: .bold))
-                            .foregroundColor(unlocked ? color : .white.opacity(0.3))
+                        // Custom text for "100" since 100.circle.fill doesn't exist
+                        if icon == "100" {
+                            Text("100")
+                                .font(.system(size: 20, weight: .bold))
+                                .foregroundColor(unlocked ? color : .white.opacity(0.3))
+                        } else {
+                            Image(systemName: icon)
+                                .font(.system(size: 24, weight: .bold))
+                                .foregroundColor(unlocked ? color : .white.opacity(0.3))
+                        }
                     }
                     
                     // Lock badge (top right)
@@ -599,9 +503,16 @@ struct AchievementDetailView: View {
                         )
                         .frame(width: 80, height: 80)
                     
-                    Image(systemName: achievement.icon)
-                        .font(.system(size: 32, weight: .bold))
-                        .foregroundColor(achievement.unlocked ? achievement.color : .white.opacity(0.3))
+                    // Custom text for "100" since 100.circle.fill doesn't exist
+                    if achievement.icon == "100" {
+                        Text("100")
+                            .font(.system(size: 28, weight: .bold))
+                            .foregroundColor(achievement.unlocked ? achievement.color : .white.opacity(0.3))
+                    } else {
+                        Image(systemName: achievement.icon)
+                            .font(.system(size: 32, weight: .bold))
+                            .foregroundColor(achievement.unlocked ? achievement.color : .white.opacity(0.3))
+                    }
                 }
                 
                 // Title

@@ -247,6 +247,30 @@ struct WatchProviderResults: Codable {
     }
 }
 
+// MARK: - Image Data Structures
+
+struct ImageData: Codable {
+    let aspectRatio: Double
+    let height: Int
+    let width: Int
+    let filePath: String
+    let voteAverage: Double
+    let voteCount: Int
+    
+    enum CodingKeys: String, CodingKey {
+        case aspectRatio = "aspect_ratio"
+        case height, width
+        case filePath = "file_path"
+        case voteAverage = "vote_average"
+        case voteCount = "vote_count"
+    }
+}
+
+struct ImagesResponse: Codable {
+    let backdrops: [ImageData]
+    let posters: [ImageData]
+}
+
 @MainActor
 class MovieService: ObservableObject {
     private let apiKey = "3e53f26a4303447ddc429900ac7ced1a"
@@ -452,6 +476,15 @@ class MovieService: ObservableObject {
         // Ensure mediaType is set
         tvShow.mediaType = "tv"
         
+        // Try to get a better backdrop using smart selection
+        if let betterBackdrop = try? await fetchBestBackdrop(
+            for: tvShowId,
+            contentType: .tv,
+            posterPath: tvShow.posterPath
+        ) {
+            tvShow.backdropPath = betterBackdrop
+        }
+        
         return tvShow
     }
     
@@ -476,6 +509,15 @@ class MovieService: ObservableObject {
         
         // Ensure mediaType is set
         movie.mediaType = "movie"
+        
+        // Try to get a better backdrop using smart selection
+        if let betterBackdrop = try? await fetchBestBackdrop(
+            for: movieId,
+            contentType: .movies,
+            posterPath: movie.posterPath
+        ) {
+            movie.backdropPath = betterBackdrop
+        }
         
         return movie
     }
@@ -512,5 +554,90 @@ class MovieService: ObservableObject {
         }
         
         return response.ukProviders
+    }
+    
+    // MARK: - Smart Backdrop Selection
+    
+    /// Fetches all available backdrops and intelligently selects the best one
+    /// Avoids backdrops that look similar to the poster (same aspect ratio)
+    /// Prioritizes highly-rated landscape backdrops
+    func fetchBestBackdrop(for movieId: Int, contentType: ContentType, posterPath: String?) async throws -> String? {
+        let mediaType = contentType == .movies ? "movie" : "tv"
+        let urlString = "\(baseURL)/\(mediaType)/\(movieId)/images?api_key=\(apiKey)"
+        
+        guard let url = URL(string: urlString) else {
+            throw URLError(.badURL)
+        }
+        
+        let (data, _) = try await URLSession.shared.data(from: url)
+        let response = try JSONDecoder().decode(ImagesResponse.self, from: data)
+        
+        // If no backdrops available, return nil
+        guard !response.backdrops.isEmpty else {
+            print("⚠️ No backdrops available for \(mediaType) \(movieId)")
+            return nil
+        }
+        
+        print("🖼️ Found \(response.backdrops.count) backdrops for \(mediaType) \(movieId)")
+        
+        // Get the poster aspect ratio if available
+        let posterAspectRatio: Double? = {
+            if let posterPath = posterPath,
+               let posterData = response.posters.first(where: { $0.filePath == posterPath }) {
+                return posterData.aspectRatio
+            }
+            return nil
+        }()
+        
+        // Filter backdrops to avoid ones that match the poster
+        var eligibleBackdrops = response.backdrops.filter { backdrop in
+            // Standard backdrop ratio is ~1.78 (16:9)
+            // Standard poster ratio is ~0.67 (2:3)
+            // We want landscape backdrops (ratio > 1.0)
+            guard backdrop.aspectRatio > 1.0 else {
+                return false
+            }
+            
+            // If we know the poster aspect ratio, avoid backdrops that are too similar
+            if let posterRatio = posterAspectRatio {
+                let ratioDifference = abs(backdrop.aspectRatio - posterRatio)
+                // If the difference is less than 0.3, they're probably too similar
+                if ratioDifference < 0.3 {
+                    print("   ❌ Skipping backdrop with ratio \(backdrop.aspectRatio) (too similar to poster ratio \(posterRatio))")
+                    return false
+                }
+            }
+            
+            // Avoid extremely wide or narrow backdrops
+            // Typical backdrop is 1.78, so allow range from 1.5 to 2.0
+            guard backdrop.aspectRatio >= 1.5 && backdrop.aspectRatio <= 2.0 else {
+                return false
+            }
+            
+            return true
+        }
+        
+        // If we filtered out all backdrops, use the original list
+        if eligibleBackdrops.isEmpty {
+            print("   ⚠️ All backdrops were filtered out, using original list")
+            eligibleBackdrops = response.backdrops
+        }
+        
+        // Sort by vote average (highest rated first), then by vote count as tiebreaker
+        let sortedBackdrops = eligibleBackdrops.sorted { backdrop1, backdrop2 in
+            if backdrop1.voteAverage != backdrop2.voteAverage {
+                return backdrop1.voteAverage > backdrop2.voteAverage
+            }
+            return backdrop1.voteCount > backdrop2.voteCount
+        }
+        
+        // Return the best backdrop
+        if let bestBackdrop = sortedBackdrops.first {
+            print("   ✅ Selected backdrop: ratio=\(bestBackdrop.aspectRatio), votes=\(bestBackdrop.voteAverage) (\(bestBackdrop.voteCount) ratings)")
+            return bestBackdrop.filePath
+        }
+        
+        print("   ⚠️ No suitable backdrop found")
+        return nil
     }
 }

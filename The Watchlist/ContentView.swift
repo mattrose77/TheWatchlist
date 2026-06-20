@@ -35,12 +35,21 @@ struct ContentView: View {
                         }
                 }
                 .environmentObject(store)
+                .disabled(store.currentMilestone != nil) // Disable interaction when milestone is showing
             } else {
                 WelcomeView(hasSeenWelcome: $hasSeenWelcome)
             }
             
-            // Milestone overlay
+            // Milestone overlay - Always on top, blocks all interaction
             if let milestone = store.currentMilestone {
+                Color.clear
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        // Prevent taps from passing through
+                    }
+                    .zIndex(99)
+                
                 MilestoneView(milestone: milestone) {
                     withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
                         store.dismissMilestone()

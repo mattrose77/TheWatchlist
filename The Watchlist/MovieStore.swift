@@ -760,6 +760,10 @@ class MovieStore: ObservableObject {
     }
     
     func markAsWatched(_ movie: Movie) {
+        // Track if watchlist will be empty after removal
+        let wasNotEmpty = !watchlist.isEmpty
+        let willBeEmpty = watchlist.count == 1 && watchlist.contains(where: { $0.id == movie.id })
+        
         withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
             watchlist.removeAll { $0.id == movie.id }
             // Remove from Up Next Queue if present
@@ -768,7 +772,14 @@ class MovieStore: ObservableObject {
                 archive.append(movie)
                 // Check for milestone after adding
                 checkForMilestone(movie: movie)
+                // Check for Century Club after adding
+                checkForCenturyClub()
             }
+        }
+        
+        // Check for Clean Slate achievement if watchlist became empty
+        if wasNotEmpty && willBeEmpty {
+            checkForCleanSlate()
         }
     }
     
@@ -782,6 +793,8 @@ class MovieStore: ObservableObject {
             archive.append(movie)
             // Check for milestone after adding
             checkForMilestone(movie: movie)
+            // Check for Century Club after adding
+            checkForCenturyClub()
         }
     }
     
@@ -819,6 +832,57 @@ class MovieStore: ObservableObject {
         }
     }
     
+    private func checkForCenturyClub() {
+        // Century Club = 100 total items (watchlist + archive)
+        let totalCount = watchlist.count + archive.count
+        
+        // Check if we just hit 100
+        guard totalCount == 100 else { return }
+        
+        // Create milestone key
+        let milestoneKey = "century-club"
+        
+        // Check if we've already achieved this milestone
+        guard !achievedMilestones.contains(milestoneKey) else { return }
+        
+        // Mark as achieved
+        var milestones = achievedMilestones
+        milestones.insert(milestoneKey)
+        achievedMilestones = milestones
+        
+        // Show the milestone with animation
+        let milestone = Milestone.centuryClubMilestone()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            withAnimation(.spring(response: 0.5, dampingFraction: 0.7)) {
+                self.currentMilestone = milestone
+            }
+        }
+    }
+    
+    private func checkForCleanSlate() {
+        // Clean Slate = watchlist is now empty (and archive has items)
+        guard watchlist.isEmpty && !archive.isEmpty else { return }
+        
+        // Create milestone key
+        let milestoneKey = "clean-slate"
+        
+        // Check if we've already achieved this milestone
+        guard !achievedMilestones.contains(milestoneKey) else { return }
+        
+        // Mark as achieved
+        var milestones = achievedMilestones
+        milestones.insert(milestoneKey)
+        achievedMilestones = milestones
+        
+        // Show the milestone with animation
+        let milestone = Milestone.cleanSlateMilestone()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            withAnimation(.spring(response: 0.5, dampingFraction: 0.7)) {
+                self.currentMilestone = milestone
+            }
+        }
+    }
+    
     func dismissMilestone() {
         withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
             currentMilestone = nil
@@ -826,10 +890,19 @@ class MovieStore: ObservableObject {
     }
     
     func removeFromWatchlist(_ movie: Movie) {
+        // Track if watchlist will be empty after removal
+        let wasNotEmpty = !watchlist.isEmpty
+        let willBeEmpty = watchlist.count == 1 && watchlist.contains(where: { $0.id == movie.id })
+        
         withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
             watchlist.removeAll { $0.id == movie.id }
             // Remove from Up Next Queue if present
             removeFromUpNextQueue(movieID: movie.id)
+        }
+        
+        // Check for Clean Slate achievement if watchlist became empty
+        if wasNotEmpty && willBeEmpty {
+            checkForCleanSlate()
         }
     }
     

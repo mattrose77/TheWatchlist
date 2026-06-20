@@ -65,6 +65,67 @@ class ProfileStats: ObservableObject {
         return (Double(topGenre.count) / Double(titlesCount)) * 100.0
     }
     
+    /// Longest movie watched (based on runtime)
+    var longestMovie: Movie? {
+        // Filter to only movies (not TV shows) with valid runtimes
+        let moviesWithRuntime = archive.filter { movie in
+            movie.isMovie && movie.runtime != nil && movie.runtime! > 0
+        }
+        
+        // Find the movie with the longest runtime
+        return moviesWithRuntime.max { ($0.runtime ?? 0) < ($1.runtime ?? 0) }
+    }
+    
+    /// Shortest movie watched (based on runtime)
+    var shortestMovie: Movie? {
+        // Filter to only movies (not TV shows) with valid runtimes
+        let moviesWithRuntime = archive.filter { movie in
+            movie.isMovie && movie.runtime != nil && movie.runtime! > 0
+        }
+        
+        // Find the movie with the shortest runtime
+        return moviesWithRuntime.min { ($0.runtime ?? 0) < ($1.runtime ?? 0) }
+    }
+    
+    /// Favorite decade information (decade, count, random movies)
+    var favoriteDecade: (decade: Int, count: Int, movies: [Movie])? {
+        // Group movies by decade
+        var decadeCounts: [Int: [Movie]] = [:]
+        
+        for movie in archive {
+            guard let releaseDateString = movie.releaseDate else { continue }
+            
+            // Parse year from release date (format: "YYYY-MM-DD")
+            let yearString = String(releaseDateString.prefix(4))
+            guard let year = Int(yearString) else { continue }
+            
+            // Calculate decade (e.g., 1995 -> 1990)
+            let decade = (year / 10) * 10
+            
+            if decadeCounts[decade] != nil {
+                decadeCounts[decade]?.append(movie)
+            } else {
+                decadeCounts[decade] = [movie]
+            }
+        }
+        
+        // Find the decade with the most movies
+        guard let topDecade = decadeCounts.max(by: { $0.value.count < $1.value.count }) else {
+            return nil
+        }
+        
+        // Get up to 4 random movies from that decade
+        let movies = topDecade.value
+        let randomMovies: [Movie]
+        if movies.count <= 4 {
+            randomMovies = movies
+        } else {
+            randomMovies = Array(movies.shuffled().prefix(4))
+        }
+        
+        return (decade: topDecade.key, count: topDecade.value.count, movies: randomMovies)
+    }
+    
     // MARK: - Achievements
     
     /// User has watched 25 or more titles
@@ -170,6 +231,20 @@ class ProfileStats: ObservableObject {
         }
         
         return decades.count >= 5
+    }
+    
+    /// User has achieved Clean Slate (cleared entire watchlist)
+    var hasCleanSlateAchievement: Bool {
+        // Check if the achievement has been unlocked in UserDefaults
+        let milestones = UserDefaults.standard.stringArray(forKey: "achieved_milestones") ?? []
+        return milestones.contains("clean-slate")
+    }
+    
+    /// User has achieved Century Club (100 total items)
+    var hasCenturyClubAchievement: Bool {
+        // Check if the achievement has been unlocked in UserDefaults
+        let milestones = UserDefaults.standard.stringArray(forKey: "achieved_milestones") ?? []
+        return milestones.contains("century-club")
     }
     
     // MARK: - Data Methods

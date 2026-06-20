@@ -12,12 +12,18 @@ struct MilestoneView: View {
     let onDismiss: () -> Void
     
     @State private var showConfetti = false
+    @State private var scale: CGFloat = 0.5
+    @State private var opacity: Double = 0
     
     var body: some View {
         ZStack {
-            // Semi-transparent background
-            Color.black.opacity(0.4)
+            // Semi-transparent background that blocks interaction
+            Color.black.opacity(0.6)
                 .ignoresSafeArea()
+                .onTapGesture {
+                    // Dismiss on background tap
+                    onDismiss()
+                }
             
             // Confetti animation
             ConfettiView()
@@ -35,11 +41,23 @@ struct MilestoneView: View {
                     .foregroundStyle(AppTextColors.primary)
                     .multilineTextAlignment(.center)
                 
-                // Count display
-                Text("\(milestone.count) \(milestone.contentType == .movies ? "Movies" : "TV Shows") Watched!")
-                    .font(.title2)
-                    .foregroundStyle(AppTextColors.secondary)
-                    .multilineTextAlignment(.center)
+                // Count display (only show for watch count milestones)
+                if case .watchCount(let count, let contentType) = milestone.type {
+                    Text("\(count) \(contentType == .movies ? "Movies" : "TV Shows") Watched!")
+                        .font(.title2)
+                        .foregroundStyle(AppTextColors.secondary)
+                        .multilineTextAlignment(.center)
+                } else if case .centuryClub = milestone.type {
+                    Text("100 Total Items!")
+                        .font(.title2)
+                        .foregroundStyle(AppTextColors.secondary)
+                        .multilineTextAlignment(.center)
+                } else if case .cleanSlate = milestone.type {
+                    Text("Watchlist Cleared!")
+                        .font(.title2)
+                        .foregroundStyle(AppTextColors.secondary)
+                        .multilineTextAlignment(.center)
+                }
                 
                 // Congratulations message
                 Text(milestone.message)
@@ -74,11 +92,19 @@ struct MilestoneView: View {
                     .stroke(AppGradient.gold.opacity(0.3), lineWidth: 1)
             )
             .padding(40)
+            .scaleEffect(scale)
+            .opacity(opacity)
         }
         .sensoryFeedback(.success, trigger: showConfetti)
         .onAppear {
             // Trigger confetti effect
             showConfetti = true
+            
+            // Animate in the card
+            withAnimation(.spring(response: 0.6, dampingFraction: 0.7)) {
+                scale = 1.0
+                opacity = 1.0
+            }
             
             // Haptic feedback
             let generator = UINotificationFeedbackGenerator()
@@ -170,7 +196,14 @@ struct ConfettiShape: Shape {
     }
 }
 
+enum MilestoneType {
+    case watchCount(Int, ContentType)  // Standard watching milestones
+    case cleanSlate                     // Cleared entire watchlist
+    case centuryClub                    // 100 total items combined
+}
+
 struct Milestone {
+    let type: MilestoneType
     let count: Int
     let contentType: ContentType
     let title: String
@@ -185,10 +218,33 @@ struct Milestone {
         }
     }
     
+    static func cleanSlateMilestone() -> Milestone {
+        return Milestone(
+            type: .cleanSlate,
+            count: 0,
+            contentType: .movies, // Not really relevant for this type
+            title: "Clean Slate",
+            emoji: "✨",
+            message: MilestoneMessages.cleanSlateMessage
+        )
+    }
+    
+    static func centuryClubMilestone() -> Milestone {
+        return Milestone(
+            type: .centuryClub,
+            count: 100,
+            contentType: .movies, // Not really relevant for this type
+            title: "Century Club",
+            emoji: "💯",
+            message: MilestoneMessages.centuryClubMessage
+        )
+    }
+    
     private static func movieMilestone(for count: Int) -> Milestone? {
         switch count {
         case 25:
             return Milestone(
+                type: .watchCount(25, .movies),
                 count: 25,
                 contentType: .movies,
                 title: "Popcorn Enthusiast",
@@ -197,6 +253,7 @@ struct Milestone {
             )
         case 50:
             return Milestone(
+                type: .watchCount(50, .movies),
                 count: 50,
                 contentType: .movies,
                 title: "Film Buff",
@@ -205,6 +262,7 @@ struct Milestone {
             )
         case 75:
             return Milestone(
+                type: .watchCount(75, .movies),
                 count: 75,
                 contentType: .movies,
                 title: "Cinema Connoisseur",
@@ -213,6 +271,7 @@ struct Milestone {
             )
         case 100:
             return Milestone(
+                type: .watchCount(100, .movies),
                 count: 100,
                 contentType: .movies,
                 title: "Movie Marathon Master",
@@ -221,6 +280,7 @@ struct Milestone {
             )
         case 150:
             return Milestone(
+                type: .watchCount(150, .movies),
                 count: 150,
                 contentType: .movies,
                 title: "Silver Screen Legend",
@@ -229,6 +289,7 @@ struct Milestone {
             )
         case 200:
             return Milestone(
+                type: .watchCount(200, .movies),
                 count: 200,
                 contentType: .movies,
                 title: "Diamond Cinephile",
@@ -237,6 +298,7 @@ struct Milestone {
             )
         case 250:
             return Milestone(
+                type: .watchCount(250, .movies),
                 count: 250,
                 contentType: .movies,
                 title: "Hollywood Historian",
@@ -245,6 +307,7 @@ struct Milestone {
             )
         case 300:
             return Milestone(
+                type: .watchCount(300, .movies),
                 count: 300,
                 contentType: .movies,
                 title: "Platinum Film Critic",
@@ -260,6 +323,7 @@ struct Milestone {
         switch count {
         case 25:
             return Milestone(
+                type: .watchCount(25, .tv),
                 count: 25,
                 contentType: .tv,
                 title: "Binge Beginner",
@@ -268,6 +332,7 @@ struct Milestone {
             )
         case 50:
             return Milestone(
+                type: .watchCount(50, .tv),
                 count: 50,
                 contentType: .tv,
                 title: "Series Streamer",
@@ -276,6 +341,7 @@ struct Milestone {
             )
         case 75:
             return Milestone(
+                type: .watchCount(75, .tv),
                 count: 75,
                 contentType: .tv,
                 title: "Episode Expert",
@@ -284,6 +350,7 @@ struct Milestone {
             )
         case 100:
             return Milestone(
+                type: .watchCount(100, .tv),
                 count: 100,
                 contentType: .tv,
                 title: "TV Titan",
@@ -292,6 +359,7 @@ struct Milestone {
             )
         case 150:
             return Milestone(
+                type: .watchCount(150, .tv),
                 count: 150,
                 contentType: .tv,
                 title: "Season Specialist",
@@ -300,6 +368,7 @@ struct Milestone {
             )
         case 200:
             return Milestone(
+                type: .watchCount(200, .tv),
                 count: 200,
                 contentType: .tv,
                 title: "Streaming Legend",
@@ -308,6 +377,7 @@ struct Milestone {
             )
         case 250:
             return Milestone(
+                type: .watchCount(250, .tv),
                 count: 250,
                 contentType: .tv,
                 title: "Broadcast Master",
@@ -316,6 +386,7 @@ struct Milestone {
             )
         case 300:
             return Milestone(
+                type: .watchCount(300, .tv),
                 count: 300,
                 contentType: .tv,
                 title: "Television Virtuoso",
@@ -331,6 +402,7 @@ struct Milestone {
 #Preview {
     MilestoneView(
         milestone: Milestone(
+            type: .watchCount(25, .movies),
             count: 25,
             contentType: .movies,
             title: "Popcorn Enthusiast",

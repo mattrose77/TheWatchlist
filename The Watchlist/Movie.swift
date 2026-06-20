@@ -12,7 +12,7 @@ struct Movie: Identifiable, Codable, Hashable {
     let title: String
     let overview: String
     let posterPath: String?
-    let backdropPath: String?
+    var backdropPath: String?
     let releaseDate: String?
     let voteAverage: Double
     var mediaType: String? // "movie" or "tv"

@@ -99,6 +99,30 @@ struct MilestoneMessages {
         ]
     ]
     
+    // MARK: - Special Achievement Messages
+    
+    static let cleanSlateMessage: String = {
+        let messages = [
+            "All caught up! Time to fill it again! ✨",
+            "Inbox zero... but for movies! 🎬",
+            "Nothing left on your list? Freedom! 🎉",
+            "You cleared it all! Now what? 😱",
+            "The satisfaction of an empty watchlist! 🙌"
+        ]
+        return messages.randomElement()!
+    }()
+    
+    static let centuryClubMessage: String = {
+        let messages = [
+            "100 movies and shows combined! You're legendary! 💯",
+            "A century of entertainment! What an achievement! 🎊",
+            "Triple digits! You've got quite the collection! 🌟",
+            "100 items strong! You're unstoppable! 🚀",
+            "Welcome to the Century Club! Members only! 🏆"
+        ]
+        return messages.randomElement()!
+    }()
+    
     // MARK: - Get Random Message
     
     static func getMessage(for count: Int, contentType: ContentType) -> String {
