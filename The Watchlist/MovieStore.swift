@@ -274,7 +274,7 @@ class MovieStore: ObservableObject {
     /// This migration enriches existing watched items with metadata needed for the profile screen
     @MainActor
     private func migrateProfileMetadataIfNeeded() async {
-        let migrationKey = "didMigrateProfileMetadata_v1"
+        let migrationKey = "didMigrateProfileMetadata_v2"  // Incremented to v2 to force re-run
         
         // Check if migration has already been completed
         guard !UserDefaults.standard.bool(forKey: migrationKey) else {
@@ -282,15 +282,33 @@ class MovieStore: ObservableObject {
             return
         }
         
-        print("🔄 Starting Profile metadata migration (V6): Backfilling genres, runtime, and posters")
+        print("🔄 Starting Profile metadata migration (V6.2): Backfilling genres, runtime, and posters")
+        print("   Current archive count: \(archive.count)")
         
         let apiKey = "3e53f26a4303447ddc429900ac7ced1a"
         let baseURL = "https://api.themoviedb.org/3"
         
         var archiveUpdated = false
+        var updatedArchive = archive  // Work with a copy
+        var itemsNeedingUpdate = 0
+        var itemsSuccessfullyUpdated = 0
+        
+        // First pass: count how many items need updating
+        for movie in updatedArchive {
+            let hasGenres = movie.genres != nil && !(movie.genres?.isEmpty ?? true)
+            let hasRuntime = movie.runtime != nil && movie.runtime! > 0
+            let hasPoster = movie.posterPath != nil
+            
+            if !hasGenres || !hasRuntime || !hasPoster {
+                itemsNeedingUpdate += 1
+                print("   📝 \(movie.title) needs update - genres: \(hasGenres), runtime: \(hasRuntime), poster: \(hasPoster)")
+            }
+        }
+        
+        print("   Found \(itemsNeedingUpdate) items needing metadata enrichment")
         
         // Process each archived item
-        for (index, movie) in archive.enumerated() {
+        for (index, movie) in updatedArchive.enumerated() {
             // Skip if this movie already has complete metadata
             let hasGenres = movie.genres != nil && !(movie.genres?.isEmpty ?? true)
             let hasRuntime = movie.runtime != nil && movie.runtime! > 0
@@ -365,8 +383,9 @@ class MovieStore: ObservableObject {
                         genres: details.genres
                     )
                     
-                    archive[index] = updatedMovie
+                    updatedArchive[index] = updatedMovie
                     archiveUpdated = true
+                    itemsSuccessfullyUpdated += 1
                     print("   ✅ Updated \(movie.title) with \(details.genres.count) genres")
                     
                 } else {
@@ -413,8 +432,9 @@ class MovieStore: ObservableObject {
                         genres: details.genres
                     )
                     
-                    archive[index] = updatedMovie
+                    updatedArchive[index] = updatedMovie
                     archiveUpdated = true
+                    itemsSuccessfullyUpdated += 1
                     print("   ✅ Updated \(movie.title) with \(details.genres.count) genres, runtime: \(details.runtime ?? 0)min")
                 }
                 
@@ -428,15 +448,16 @@ class MovieStore: ObservableObject {
             }
         }
         
-        // Save updated archive if any changes were made
+        // Update the archive if any changes were made - this triggers didSet
         if archiveUpdated {
-            saveArchive()
-            print("💾 Saved updated archive with enriched metadata")
+            archive = updatedArchive  // Reassign to trigger @Published and didSet
+            print("💾 Saved updated archive with enriched metadata (\(archive.count) items)")
+            print("   Successfully updated \(itemsSuccessfullyUpdated) out of \(itemsNeedingUpdate) items")
         }
         
         // Mark migration as complete
         UserDefaults.standard.set(true, forKey: migrationKey)
-        print("✅ Profile metadata migration (V6) complete")
+        print("✅ Profile metadata migration (V6.2) complete")
     }
     
     // MARK: - Persistence Methods
@@ -759,42 +780,74 @@ class MovieStore: ObservableObject {
         }
     }
     
-    func markAsWatched(_ movie: Movie) {
+    func markAsWatched(_ movie: Movie) async {
         // Track if watchlist will be empty after removal
         let wasNotEmpty = !watchlist.isEmpty
         let willBeEmpty = watchlist.count == 1 && watchlist.contains(where: { $0.id == movie.id })
         
-        withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
-            watchlist.removeAll { $0.id == movie.id }
-            // Remove from Up Next Queue if present
-            removeFromUpNextQueue(movieID: movie.id)
-            if !archive.contains(where: { $0.id == movie.id }) {
-                archive.append(movie)
-                // Check for milestone after adding
-                checkForMilestone(movie: movie)
-                // Check for Century Club after adding
-                checkForCenturyClub()
+        // Fetch full movie details to get genres, runtime, etc.
+        var enrichedMovie = movie
+        do {
+            if movie.isMovie {
+                enrichedMovie = try await movieService.fetchMovieBasicData(movieId: movie.id)
+            } else {
+                enrichedMovie = try await movieService.fetchTVShowDetails(tvShowId: movie.id)
             }
+            print("✅ Fetched full details for \(enrichedMovie.title) with \(enrichedMovie.genres?.count ?? 0) genres")
+        } catch {
+            print("⚠️ Failed to fetch full details for \(movie.title), using basic data: \(error)")
+            // If fetch fails, still use the original movie (better than nothing)
         }
         
-        // Check for Clean Slate achievement if watchlist became empty
-        if wasNotEmpty && willBeEmpty {
-            checkForCleanSlate()
+        await MainActor.run {
+            withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
+                watchlist.removeAll { $0.id == movie.id }
+                // Remove from Up Next Queue if present
+                removeFromUpNextQueue(movieID: movie.id)
+                if !archive.contains(where: { $0.id == movie.id }) {
+                    archive.append(enrichedMovie)
+                    // Check for milestone after adding
+                    checkForMilestone(movie: enrichedMovie)
+                    // Check for Century Club after adding
+                    checkForCenturyClub()
+                }
+            }
+            
+            // Check for Clean Slate achievement if watchlist became empty
+            if wasNotEmpty && willBeEmpty {
+                checkForCleanSlate()
+            }
         }
     }
     
-    func addToArchive(_ movie: Movie) {
+    func addToArchive(_ movie: Movie) async {
         guard !archive.contains(where: { $0.id == movie.id }) else { return }
         
-        withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
-            // Remove from watchlist if it's there
-            watchlist.removeAll { $0.id == movie.id }
-            // Add to archive
-            archive.append(movie)
-            // Check for milestone after adding
-            checkForMilestone(movie: movie)
-            // Check for Century Club after adding
-            checkForCenturyClub()
+        // Fetch full movie details to get genres, runtime, etc.
+        var enrichedMovie = movie
+        do {
+            if movie.isMovie {
+                enrichedMovie = try await movieService.fetchMovieBasicData(movieId: movie.id)
+            } else {
+                enrichedMovie = try await movieService.fetchTVShowDetails(tvShowId: movie.id)
+            }
+            print("✅ Fetched full details for \(enrichedMovie.title) with \(enrichedMovie.genres?.count ?? 0) genres")
+        } catch {
+            print("⚠️ Failed to fetch full details for \(movie.title), using basic data: \(error)")
+            // If fetch fails, still use the original movie (better than nothing)
+        }
+        
+        await MainActor.run {
+            withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
+                // Remove from watchlist if it's there
+                watchlist.removeAll { $0.id == movie.id }
+                // Add to archive
+                archive.append(enrichedMovie)
+                // Check for milestone after adding
+                checkForMilestone(movie: enrichedMovie)
+                // Check for Century Club after adding
+                checkForCenturyClub()
+            }
         }
     }
     

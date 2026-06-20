@@ -40,12 +40,21 @@ class ProfileStats: ObservableObject {
     
     // MARK: - Private Properties
     
-    private let archive: [Movie]
-    private let ratings: [Int: UserRating]
+    private var archive: [Movie]
+    private var ratings: [Int: UserRating]
     
     // MARK: - Initialization
     
     init(archive: [Movie], ratings: [Int: UserRating]) {
+        self.archive = archive
+        self.ratings = ratings
+        calculateStats()
+    }
+    
+    // MARK: - Public Update Methods
+    
+    /// Updates the archive and recalculates statistics
+    func updateData(archive: [Movie], ratings: [Int: UserRating]) {
         self.archive = archive
         self.ratings = ratings
         calculateStats()

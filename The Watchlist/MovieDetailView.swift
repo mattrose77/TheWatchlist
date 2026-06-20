@@ -72,12 +72,20 @@ struct MovieDetailView: View {
                     
                     if isInWatchlist {
                         // Movie is in watchlist - move it to archive
-                        store.markAsWatched(movie)
-                        dismiss()
+                        Task {
+                            await store.markAsWatched(movie)
+                            await MainActor.run {
+                                dismiss()
+                            }
+                        }
                     } else if !isInArchive {
                         // Movie is not in watchlist and not in archive - add directly to archive
-                        store.addToArchive(movie)
-                        dismiss()
+                        Task {
+                            await store.addToArchive(movie)
+                            await MainActor.run {
+                                dismiss()
+                            }
+                        }
                     }
                     // If it's already in archive, just update the rating (no dismiss)
                     // The sheet will dismiss itself, but we don't close the detail view

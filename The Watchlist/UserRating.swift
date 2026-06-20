@@ -7,7 +7,7 @@
 
 import Foundation
 
-struct UserRating: Codable {
+struct UserRating: Codable, Equatable {
     let movieId: Int
     let rating: Double // 0.0 to 5.0, in 0.5 increments
     let date: Date

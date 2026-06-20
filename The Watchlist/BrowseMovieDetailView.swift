@@ -67,11 +67,13 @@ struct BrowseMovieDetailView: View {
                 rating: $currentRating,
                 movie: movie,
                 onSubmit: { rating in
-                    if rating > 0 {
-                        store.setRating(rating, for: movie)
+                    Task {
+                        if rating > 0 {
+                            store.setRating(rating, for: movie)
+                        }
+                        await store.markAsWatched(movie)
+                        dismiss()
                     }
-                    store.markAsWatched(movie)
-                    dismiss()
                 }
             )
             .presentationDetents([.medium])

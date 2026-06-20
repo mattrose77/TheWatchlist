@@ -46,7 +46,7 @@ struct StatsCarouselView: View {
                 .tabViewStyle(.page(indexDisplayMode: .never))
             }
             .frame(height: calculateCardHeight())
-            .animation(.easeInOut(duration: 0.3), value: currentPage)
+            .animation(.spring(response: 0.4, dampingFraction: 0.8), value: currentPage)
             
             // Page indicators inside the card
             HStack(spacing: 6) {
@@ -54,9 +54,9 @@ struct StatsCarouselView: View {
                     Circle()
                         .fill(currentPage == index ? Color.white : Color.white.opacity(0.4))
                         .frame(width: 6, height: 6)
-                        .animation(.easeInOut(duration: 0.2), value: currentPage)
                 }
             }
+            .animation(.spring(response: 0.3, dampingFraction: 0.7), value: currentPage)
             .padding(.top, 8)
             .padding(.bottom, 12)
         }
@@ -173,7 +173,7 @@ struct StatsCarouselView: View {
             Color(hex: "FF6B6B"), // Red
             Color(hex: "4ECDC4"), // Cyan
             Color(hex: "95E1D3"), // Mint
-            Color(hex: "F38181")  // Pink
+            Color(hex: "A78BFA")  // Purple
         ]
         return colors[index % colors.count]
     }
@@ -473,8 +473,11 @@ struct StatsCarouselView: View {
     let actionGenre = Genre(id: 28, name: "Action")
     let sciFiGenre = Genre(id: 878, name: "Science Fiction")
     let dramaGenre = Genre(id: 18, name: "Drama")
+    let comedyGenre = Genre(id: 35, name: "Comedy")
+    let thrillerGenre = Genre(id: 53, name: "Thriller")
     
     let sampleMovies: [Movie] = [
+        // Action movies (5)
         Movie(
             id: 1,
             title: "Inception",
@@ -484,7 +487,7 @@ struct StatsCarouselView: View {
             voteAverage: 8.4,
             mediaType: "movie",
             runtime: 148,
-            genres: [actionGenre, sciFiGenre]
+            genres: [actionGenre]
         ),
         Movie(
             id: 2,
@@ -495,21 +498,89 @@ struct StatsCarouselView: View {
             voteAverage: 9.0,
             mediaType: "movie",
             runtime: 152,
-            genres: [actionGenre, dramaGenre]
+            genres: [actionGenre]
         ),
         Movie(
             id: 3,
-            title: "Toy Story",
-            overview: "A short film...",
+            title: "Mad Max",
+            overview: "Action movie...",
             posterPath: "/uXDfjJbdP4ijW5hWSBrPrlKpxab.jpg",
-            releaseDate: "1995-11-22",
-            voteAverage: 8.0,
+            releaseDate: "2015-05-15",
+            voteAverage: 8.1,
             mediaType: "movie",
-            runtime: 81,
+            runtime: 120,
             genres: [actionGenre]
         ),
         Movie(
             id: 4,
+            title: "John Wick",
+            overview: "Action movie...",
+            posterPath: "/uXDfjJbdP4ijW5hWSBrPrlKpxab.jpg",
+            releaseDate: "2014-10-24",
+            voteAverage: 7.4,
+            mediaType: "movie",
+            runtime: 101,
+            genres: [actionGenre]
+        ),
+        Movie(
+            id: 5,
+            title: "Die Hard",
+            overview: "Action movie...",
+            posterPath: "/uXDfjJbdP4ijW5hWSBrPrlKpxab.jpg",
+            releaseDate: "1988-07-15",
+            voteAverage: 8.2,
+            mediaType: "movie",
+            runtime: 132,
+            genres: [actionGenre]
+        ),
+        // Sci-Fi movies (4)
+        Movie(
+            id: 6,
+            title: "Blade Runner",
+            overview: "Sci-fi movie...",
+            posterPath: "/gajva2L0rPYkEWjzgFlBXCAVBE5.jpg",
+            releaseDate: "1982-06-25",
+            voteAverage: 8.0,
+            mediaType: "movie",
+            runtime: 117,
+            genres: [sciFiGenre]
+        ),
+        Movie(
+            id: 7,
+            title: "The Matrix",
+            overview: "Sci-fi movie...",
+            posterPath: "/gajva2L0rPYkEWjzgFlBXCAVBE5.jpg",
+            releaseDate: "1999-03-31",
+            voteAverage: 8.7,
+            mediaType: "movie",
+            runtime: 136,
+            genres: [sciFiGenre]
+        ),
+        Movie(
+            id: 8,
+            title: "Interstellar",
+            overview: "Sci-fi movie...",
+            posterPath: "/gajva2L0rPYkEWjzgFlBXCAVBE5.jpg",
+            releaseDate: "2014-11-07",
+            voteAverage: 8.6,
+            mediaType: "movie",
+            runtime: 169,
+            genres: [sciFiGenre]
+        ),
+        Movie(
+            id: 9,
+            title: "Dune",
+            overview: "Sci-fi movie...",
+            posterPath: "/gajva2L0rPYkEWjzgFlBXCAVBE5.jpg",
+            releaseDate: "2021-10-22",
+            voteAverage: 8.0,
+            mediaType: "movie",
+            runtime: 155,
+            genres: [sciFiGenre]
+        ),
+        // Drama movies (3)
+        Movie(
+            id: 10,
             title: "The Godfather",
             overview: "The aging patriarch...",
             posterPath: "/3bhkrj58Vtu7enYsRolD1fZdja1.jpg",
@@ -518,6 +589,63 @@ struct StatsCarouselView: View {
             mediaType: "movie",
             runtime: 175,
             genres: [dramaGenre]
+        ),
+        Movie(
+            id: 11,
+            title: "The Shawshank Redemption",
+            overview: "Drama movie...",
+            posterPath: "/3bhkrj58Vtu7enYsRolD1fZdja1.jpg",
+            releaseDate: "1994-09-23",
+            voteAverage: 9.3,
+            mediaType: "movie",
+            runtime: 142,
+            genres: [dramaGenre]
+        ),
+        Movie(
+            id: 12,
+            title: "Fight Club",
+            overview: "Drama movie...",
+            posterPath: "/3bhkrj58Vtu7enYsRolD1fZdja1.jpg",
+            releaseDate: "1999-10-15",
+            voteAverage: 8.4,
+            mediaType: "movie",
+            runtime: 139,
+            genres: [dramaGenre]
+        ),
+        // Comedy movies (2)
+        Movie(
+            id: 13,
+            title: "Superbad",
+            overview: "Comedy movie...",
+            posterPath: "/arw2vcBveWOVZr6pxd9XTd1TdQa.jpg",
+            releaseDate: "2007-08-17",
+            voteAverage: 7.5,
+            mediaType: "movie",
+            runtime: 113,
+            genres: [comedyGenre]
+        ),
+        Movie(
+            id: 14,
+            title: "The Hangover",
+            overview: "Comedy movie...",
+            posterPath: "/arw2vcBveWOVZr6pxd9XTd1TdQa.jpg",
+            releaseDate: "2009-06-05",
+            voteAverage: 7.7,
+            mediaType: "movie",
+            runtime: 100,
+            genres: [comedyGenre]
+        ),
+        // Thriller movies (1)
+        Movie(
+            id: 15,
+            title: "Se7en",
+            overview: "Thriller movie...",
+            posterPath: "/d5iIlFn5s0ImszYzBPb8JPIfbXD.jpg",
+            releaseDate: "1995-09-22",
+            voteAverage: 8.3,
+            mediaType: "movie",
+            runtime: 127,
+            genres: [thrillerGenre]
         )
     ]
     
@@ -525,7 +653,18 @@ struct StatsCarouselView: View {
         1: UserRating(movieId: 1, rating: 5.0),
         2: UserRating(movieId: 2, rating: 5.0),
         3: UserRating(movieId: 3, rating: 4.0),
-        4: UserRating(movieId: 4, rating: 5.0)
+        4: UserRating(movieId: 4, rating: 5.0),
+        5: UserRating(movieId: 5, rating: 4.5),
+        6: UserRating(movieId: 6, rating: 4.5),
+        7: UserRating(movieId: 7, rating: 5.0),
+        8: UserRating(movieId: 8, rating: 5.0),
+        9: UserRating(movieId: 9, rating: 4.0),
+        10: UserRating(movieId: 10, rating: 5.0),
+        11: UserRating(movieId: 11, rating: 5.0),
+        12: UserRating(movieId: 12, rating: 4.5),
+        13: UserRating(movieId: 13, rating: 4.0),
+        14: UserRating(movieId: 14, rating: 3.5),
+        15: UserRating(movieId: 15, rating: 4.5)
     ]
     
     let stats = ProfileStats(archive: sampleMovies, ratings: sampleRatings)

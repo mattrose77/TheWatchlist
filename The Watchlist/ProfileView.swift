@@ -9,6 +9,7 @@ import SwiftUI
 
 struct ProfileView: View {
     @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject var store: MovieStore
     @StateObject private var stats: ProfileStats
     @State private var selectedGenreId: Int?
     @State private var showingEditProfile = false
@@ -51,6 +52,12 @@ struct ProfileView: View {
             AppGradient.background
                 .ignoresSafeArea()
         )
+        .onChange(of: store.archive) { _, newArchive in
+            stats.updateData(archive: newArchive, ratings: store.userRatings)
+        }
+        .onChange(of: store.userRatings) { _, newRatings in
+            stats.updateData(archive: store.archive, ratings: newRatings)
+        }
         .sheet(isPresented: $showingEditProfile) {
             EditProfileView()
         }
